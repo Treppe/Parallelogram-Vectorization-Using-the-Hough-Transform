@@ -114,6 +114,27 @@ eges3 = np.array([[9.45637, 65.319],
                   [8.20689, 64.4266],
                   [9.0364, 64.8728]])
 
+line = np.array([[1,1],
+         [2,2],
+         [3,3],
+         [4,4]])
+line = line * 10
+
+square = np.array([[10,10],
+                   [10,15],
+                   [10,20],
+                   [10,25],
+                   [10,30],
+                   [15,30],
+                   [20,30],
+                   [25,30],
+                   [30,30],
+                   [30,25],
+                   [30,20],
+                   [30,15],
+                   [30,10],
+                   [25,10],
+                   [20,10]])
 
 def hough_transform(points, theta_res=1, rho_res=1):
     '''..
@@ -124,15 +145,17 @@ def hough_transform(points, theta_res=1, rho_res=1):
     '''
     x_max = np.ceil(np.amax(points[:, 0]))
     y_max = np.ceil(np.amax(points[:, 1]))
+    n_max = np.amax(points)
     
     # Making theta dimension:
-    theta = np.linspace(0.0, 180.0, np.ceil(180.0/theta_res) + 1.0)
+    theta = np.arange(0.0, 180.0, 180/(2*(n_max-1)))
+    #theta = np.linspace(0.0, 180.0, np.ceil(180.0/theta_res) + 1.0)
     #theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
     # Making rho dimension:
     D = np.sqrt((x_max)**2 + (y_max)**2)
     q = np.ceil(D/rho_res)
     nrho = 2*q + 1
-    rho = np.linspace(-q*rho_res, q*rho_res, nrho)
+    rho = np.arange(-q*rho_res, q*rho_res, nrho)
     
     # Initialize an empty Hough Accumulator:
     H = np.zeros((len(rho), len(theta)))
@@ -179,3 +202,6 @@ thetas3, rhos3, H3 = hough_transform(edges2)
 rho_theta_pairs1, x_y_pairs1 = top_n_rho_theta_pairs(H1, 4, rhos1, thetas1)
 rho_theta_pairs2, x_y_pairs2 = top_n_rho_theta_pairs(H2, 4, rhos2, thetas2)
 rho_theta_pairs3, x_y_pairs3 = top_n_rho_theta_pairs(H3, 4, rhos3, thetas3)
+
+thetasl, rhosl, Hl = hough_transform(line)
+thetassq, rhossq, Hsq = hough_transform(square)
