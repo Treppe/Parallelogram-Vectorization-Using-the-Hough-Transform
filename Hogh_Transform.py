@@ -155,7 +155,7 @@ def hough_transform(points, theta_res=1, rho_res=1):
     D = np.sqrt((x_max)**2 + (y_max)**2)
     q = np.ceil(D/rho_res)
     nrho = 2*q + 1
-    rho = np.arange(-q*rho_res, q*rho_res, nrho)
+    rho = np.linspace(-q*rho_res, q*rho_res, nrho)
     
     # Initialize an empty Hough Accumulator:
     H = np.zeros((len(rho), len(theta)))
