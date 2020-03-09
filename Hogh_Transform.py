@@ -75,7 +75,7 @@ edges2 = np.array([[17.5544, 72.9043],
                     [16.9031, 72.235],
                     [17.4457, 72.7928]])
 
-eges3 = np.array([[9.45637, 65.319],
+edges3 = np.array([[9.45637, 65.319],
                   [10.2887, 65.7652],
                   [11.1226, 66.2114],
                   [11.9581, 66.6576],
@@ -136,7 +136,7 @@ square = np.array([[10,10],
                    [25,10],
                    [20,10]])
 
-def hough_transform(points, theta_res=1, rho_res=1):
+def hough_transform(points, theta_res=1, rho_res=1, x=0, y=0):
     '''..
     @param points array to transform
     @param resolution of theta
@@ -148,9 +148,8 @@ def hough_transform(points, theta_res=1, rho_res=1):
     n_max = np.amax(points)
     
     # Making theta dimension:
-    theta = np.arange(0.0, 180.0, 180/(2*(n_max-1)))
-    #theta = np.linspace(0.0, 180.0, np.ceil(180.0/theta_res) + 1.0)
-    #theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
+    theta = np.linspace(-90.0, 0.0, np.ceil(90.0/theta_res) + 1.0)
+    theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
     # Making rho dimension:
     D = np.sqrt((x_max)**2 + (y_max)**2)
     q = np.ceil(D/rho_res)
@@ -165,8 +164,8 @@ def hough_transform(points, theta_res=1, rho_res=1):
         for thIdx in range(len(theta)):
             rhoVal = x*math.cos(theta[thIdx]*math.pi/180.0) - \
                     y*math.sin(theta[thIdx]*math.pi/180)
-            rhoIdx = int(D + round(rhoVal)) # Not Sure
-            #rhoIdx = np.nonzero(np.abs(rho-rhoVal) == np.min(np.abs(rho-rhoVal)))[0]
+            #rhoIdx = int(rhoVal) # Not Sure
+            rhoIdx = np.nonzero(np.abs(rho-rhoVal) == np.min(np.abs(rho-rhoVal)))[0]
             H[rhoIdx, thIdx] += 1
 
     return theta, rho, H
@@ -197,7 +196,7 @@ def top_n_rho_theta_pairs(ht_acc_matrix, n, rhos, thetas):
 
 thetas1, rhos1, H1 = hough_transform(edges1)
 thetas2, rhos2, H2 = hough_transform(edges2)
-thetas3, rhos3, H3 = hough_transform(edges2)
+thetas3, rhos3, H3 = hough_transform(edges3)
     
 rho_theta_pairs1, x_y_pairs1 = top_n_rho_theta_pairs(H1, 4, rhos1, thetas1)
 rho_theta_pairs2, x_y_pairs2 = top_n_rho_theta_pairs(H2, 4, rhos2, thetas2)
@@ -205,3 +204,4 @@ rho_theta_pairs3, x_y_pairs3 = top_n_rho_theta_pairs(H3, 4, rhos3, thetas3)
 
 thetasl, rhosl, Hl = hough_transform(line)
 thetassq, rhossq, Hsq = hough_transform(square)
+rho_theta_pairs_sq, x_y_pairs_sq = top_n_rho_theta_pairs(Hsq, 4, rhossq, thetassq)
