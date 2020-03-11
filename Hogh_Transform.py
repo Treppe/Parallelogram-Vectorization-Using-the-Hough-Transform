@@ -147,13 +147,15 @@ def hough_transform(points, theta_res=1, rho_res=1):
     y_max = np.ceil(np.amax(points[:, 1]))
     # Making theta dimension:
     #theta = np.linspace(-90, 90, np.ceil(180.0/theta_res) + 1.0)
-    theta = np.arange(-90, 90, 180/(2*(y_max - 1)))
+    theta = np.arange(-100, 100, 180/(2*(y_max - 1)))
     # Making rho dimension:
-    D = np.sqrt((x_max)**2 + (y_max)**2)
+    D = np.sqrt((x_max+10)**2 + (y_max+10)**2)
     q = np.ceil(D/rho_res)
+    rho = np.arange(-q*rho_res, q*rho_res, math.pi/4)
+    '''
     nrho = 2*q + 1
     rho = np.linspace(-q*rho_res, q*rho_res, nrho)
-    
+    '''
     # Initialize an empty Hough Accumulator:
     H = np.zeros((len(rho), len(theta)))
     
@@ -164,8 +166,13 @@ def hough_transform(points, theta_res=1, rho_res=1):
                     y*math.sin(theta[thIdx]*math.pi/180.0)
             rhoIdx = np.nonzero(np.abs(rho-rhoVal) == np.min(np.abs(rho-rhoVal)))[0]
             H[rhoIdx[0], thIdx] += 1
-         
-    return theta, rho, H
+    # Enchanced accumulator model
+    h = len(rho)
+    w = len(theta)
+    H_integr = np.sum(H[int(h*0.25):int(h*0.75), int(w*0.25):int(w*0.75)])
+    H_ench = h*w*(H**2)/H_integr
+
+    return theta, rho, H, H_ench
 
 def top_n_rho_theta_pairs(ht_acc_matrix, n, rhos, thetas):
   '''
@@ -191,16 +198,16 @@ def top_n_rho_theta_pairs(ht_acc_matrix, n, rhos, thetas):
       x_y.append([k, n]) # just to unnest and reorder coords_sorted
   return [rho_theta[0:n], x_y]
 
-thetas1, rhos1, H1 = hough_transform(edges1, 1.5, 1.5)
-thetas2, rhos2, H2 = hough_transform(edges2, 1.5, 1.5)
-#thetas3, rhos3, H3 = hough_transform(edges3)
+thetas1, rhos1, H1, H1_ench = hough_transform(edges1, 10, 10)
+thetas2, rhos2, H2, H2_ench = hough_transform(edges2, 1, 1)
+thetas3, rhos3, H3, H3_ench = hough_transform(edges3, 1, 1)
     
-rho_theta_pairs1, x_y_pairs1 = top_n_rho_theta_pairs(H1, 100, rhos1, thetas1)
-rho_theta_pairs2, x_y_pairs2 = top_n_rho_theta_pairs(H2, 4, rhos2, thetas2)
-#rho_theta_pairs3, x_y_pairs3 = top_n_rho_theta_pairs(H3, 4, rhos3, thetas3)
+rho_theta_pairs1, x_y_pairs1 = top_n_rho_theta_pairs(H1_ench, 4, rhos1, thetas1)
+rho_theta_pairs2, x_y_pairs2 = top_n_rho_theta_pairs(H2_ench, 4, rhos2, thetas2)
+rho_theta_pairs3, x_y_pairs3 = top_n_rho_theta_pairs(H3_ench, 100, rhos3, thetas3)
 
 
 # Samples check
 #thetasl, rhosl, Hl = hough_transform(line)
-thetassq, rhossq, Hsq = hough_transform(square, 1, 1)
+thetassq, rhossq, Hsq, Hsq_ench = hough_transform(square, 1, 1)
 rho_theta_pairssq, x_y_pairssq = top_n_rho_theta_pairs(Hsq, 4, rhossq, thetassq)
