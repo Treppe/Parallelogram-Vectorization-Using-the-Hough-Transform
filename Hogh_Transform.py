@@ -136,7 +136,7 @@ square = np.array([[10,10],
                    [25,10],
                    [20,10]])
 
-def hough_transform(points, theta_res=1, rho_res=1, x=0, y=0):
+def hough_transform(points, theta_res=1, rho_res=1):
     '''..
     @param points array to transform
     @param resolution of theta
@@ -145,11 +145,9 @@ def hough_transform(points, theta_res=1, rho_res=1, x=0, y=0):
     '''
     x_max = np.ceil(np.amax(points[:, 0]))
     y_max = np.ceil(np.amax(points[:, 1]))
-    n_max = np.amax(points)
-    
     # Making theta dimension:
-    theta = np.linspace(-90.0, 0.0, np.ceil(90.0/theta_res) + 1.0)
-    theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
+    #theta = np.linspace(-90, 90, np.ceil(180.0/theta_res) + 1.0)
+    theta = np.arange(-90, 90, 180/(2*(y_max - 1)))
     # Making rho dimension:
     D = np.sqrt((x_max)**2 + (y_max)**2)
     q = np.ceil(D/rho_res)
@@ -162,12 +160,11 @@ def hough_transform(points, theta_res=1, rho_res=1, x=0, y=0):
     # Making Hough Space:
     for x, y in points:
         for thIdx in range(len(theta)):
-            rhoVal = x*math.cos(theta[thIdx]*math.pi/180.0) - \
-                    y*math.sin(theta[thIdx]*math.pi/180)
-            #rhoIdx = int(rhoVal) # Not Sure
+            rhoVal = x*math.cos(theta[thIdx]*math.pi/180.0) + \
+                    y*math.sin(theta[thIdx]*math.pi/180.0)
             rhoIdx = np.nonzero(np.abs(rho-rhoVal) == np.min(np.abs(rho-rhoVal)))[0]
-            H[rhoIdx, thIdx] += 1
-
+            H[rhoIdx[0], thIdx] += 1
+         
     return theta, rho, H
 
 def top_n_rho_theta_pairs(ht_acc_matrix, n, rhos, thetas):
@@ -180,28 +177,30 @@ def top_n_rho_theta_pairs(ht_acc_matrix, n, rhos, thetas):
   @return x,y indexes in H of top n rho theta pairs
   '''
   flat = list(set(np.hstack(ht_acc_matrix)))
-  flat_sorted = sorted(flat, key = lambda n: -n)
+  flat_sorted = sorted(flat, key = lambda n: -n) 
   coords_sorted = [(np.argwhere(ht_acc_matrix == acc_value)) for acc_value in flat_sorted[0:n]]
   rho_theta = []
   x_y = []
   for coords_for_val_idx in range(0, len(coords_sorted), 1):
     coords_for_val = coords_sorted[coords_for_val_idx]
     for i in range(0, len(coords_for_val), 1):
-      k,m = coords_for_val[i] # n by m matrix
+      k,m = coords_for_val[i] # k by m matrix
       rho = rhos[k]
       theta = thetas[m]
       rho_theta.append([rho, theta])
       x_y.append([k, n]) # just to unnest and reorder coords_sorted
   return [rho_theta[0:n], x_y]
 
-thetas1, rhos1, H1 = hough_transform(edges1)
-thetas2, rhos2, H2 = hough_transform(edges2)
-thetas3, rhos3, H3 = hough_transform(edges3)
+thetas1, rhos1, H1 = hough_transform(edges1, 1.5, 1.5)
+thetas2, rhos2, H2 = hough_transform(edges2, 1.5, 1.5)
+#thetas3, rhos3, H3 = hough_transform(edges3)
     
-rho_theta_pairs1, x_y_pairs1 = top_n_rho_theta_pairs(H1, 4, rhos1, thetas1)
+rho_theta_pairs1, x_y_pairs1 = top_n_rho_theta_pairs(H1, 100, rhos1, thetas1)
 rho_theta_pairs2, x_y_pairs2 = top_n_rho_theta_pairs(H2, 4, rhos2, thetas2)
-rho_theta_pairs3, x_y_pairs3 = top_n_rho_theta_pairs(H3, 4, rhos3, thetas3)
+#rho_theta_pairs3, x_y_pairs3 = top_n_rho_theta_pairs(H3, 4, rhos3, thetas3)
 
-thetasl, rhosl, Hl = hough_transform(line)
-thetassq, rhossq, Hsq = hough_transform(square)
-rho_theta_pairs_sq, x_y_pairs_sq = top_n_rho_theta_pairs(Hsq, 4, rhossq, thetassq)
+
+# Samples check
+#thetasl, rhosl, Hl = hough_transform(line)
+thetassq, rhossq, Hsq = hough_transform(square, 1, 1)
+rho_theta_pairssq, x_y_pairssq = top_n_rho_theta_pairs(Hsq, 4, rhossq, thetassq)
