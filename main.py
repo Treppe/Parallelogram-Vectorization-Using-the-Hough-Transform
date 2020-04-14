@@ -429,7 +429,13 @@ def choose_peaks(ht_acc, peaks, rhos, thetas, theta_T, len_T = 0.5):
                 satisfying_pairs.append([current_peak, float(acc_value1), compare_peak, float(acc_value2)])
     return peaks_to_dict(satisfying_pairs)
 
-
+def find_x_y(rho1, theta1, rho2, theta2):
+    theta1 = theta1 * math.pi / 180
+    theta2 = theta2 * math.pi / 180
+    a_matrix = np.array([[math.cos(theta1), math.sin(theta1)], [math.cos(theta2), math.sin(theta2)]])
+    b_matrix = np.array([rho1, rho2])
+    x_y = np.linalg.solve(a_matrix, b_matrix)
+    return x_y
 
 def gen_extended_peaks(peak_pairs):
     """
@@ -484,8 +490,6 @@ def find_valid_peaks_pair(peaks):
             if vert_dist_is_valid(current_peak, other_peak)[0]:
                 return [current_peak, other_peak]
             
-            
-
 def run_algorithm(figure, enh = True):
     '''
     
@@ -516,15 +520,33 @@ def run_algorithm(figure, enh = True):
     '''
     figure = assign_figure(figure)
     thetas, rhos, C, theta_T = hough_transform(figure, enh)
-    rho_theta_pairs, x_y_pairs= top_n_rho_theta_pairs(C, 8, rhos, thetas)
+    rho_theta_pairs, x_y_pairs= top_n_rho_theta_pairs(C, 4, rhos, thetas)
     satisfying_pairs = choose_peaks(C, rho_theta_pairs, rhos, thetas, theta_T)
-    extended_peaks = gen_extended_peaks(satisfying_pairs)
-    valid_peaks = find_valid_peaks_pair(extended_peaks)
-    return thetas, rhos, C, rho_theta_pairs, x_y_pairs, satisfying_pairs, extended_peaks, valid_peaks
+    x1_y1 = find_x_y(satisfying_pairs[0]["rhos"][0], 
+                     satisfying_pairs[0]["thetas"][0], 
+                     satisfying_pairs[1]["rhos"][0], 
+                     satisfying_pairs[1]["thetas"][0])
+    x2_y2 = find_x_y(satisfying_pairs[0]["rhos"][0], 
+                     satisfying_pairs[0]["thetas"][0], 
+                     satisfying_pairs[1]["rhos"][1], 
+                     satisfying_pairs[1]["thetas"][1])
+    x3_y3 = find_x_y(satisfying_pairs[0]["rhos"][1], 
+                     satisfying_pairs[0]["thetas"][1], 
+                     satisfying_pairs[1]["rhos"][0], 
+                     satisfying_pairs[1]["thetas"][0])
+    x4_y4 = find_x_y(satisfying_pairs[0]["rhos"][1], 
+                     satisfying_pairs[0]["thetas"][1], 
+                     satisfying_pairs[1]["rhos"][1], 
+                     satisfying_pairs[1]["thetas"][1])
+    vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
+    #extended_peaks = gen_extended_peaks(satisfying_pairs)
+    #valid_peaks = find_valid_peaks_pair(extended_peaks)
+    return thetas, rhos, C, rho_theta_pairs, x_y_pairs, satisfying_pairs, vertices
 
 #================================================TEST CASES=======================================================
 
 #Square
-thetas, rhos, C_ench, rho_theta_pairs, x_y_pairs, satisfying_pairs, extended_peaks, valid_peaks = run_algorithm("square", False)
+thetas, rhos, C_ench, rho_theta_pairs, x_y_pairs, satisfying_pairs, vertices= run_algorithm("square")
+
 
 
