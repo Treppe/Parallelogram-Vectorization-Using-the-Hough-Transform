@@ -186,7 +186,7 @@ def find_max_points(points):
     y_max = np.ceil(np.amax(points[:, 1]))
     return x_max, y_max
 
-def create_rho_theta_enh(x_max, y_max, rho_res):
+def create_rho_theta(x_max, y_max, rho_res):
     """
     Helper function for Hough Transform
     Creates rho and theta dimension for enchaced Hough accumulator
@@ -208,44 +208,14 @@ def create_rho_theta_enh(x_max, y_max, rho_res):
         Empty array representing rho dimension
 
     """
-     # Making theta dimension
-    theta = np.arange(-90, 90, 180/(2*(y_max - 1)))
+   
+    # Making theta dimension
+    d_theta= 180/(2*(y_max - 1))
+    theta = np.arange(-90, 90, d_theta)
     # Making rho dimension:
     max_dist = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
     fac = np.ceil(max_dist/rho_res) # resolution factor
     rho = np.arange(-fac*rho_res, fac*rho_res, math.pi/4)
-    return theta, rho
-
-def create_rho_theta_normal(x_max, y_max, rho_res, theta_res):
-    '''
-    Helper function for Hough Transform
-    Creates rho and theta dimension for not enchaced Hough accumulator
-
-       Parameters
-    ----------
-    x_max : float
-        The highest value by x axis
-    y_max : float
-        The highest value by y axis
-    rho_res : float
-        Rho resolution. Determines discretisation step for rho
-    theta_res : float
-        Theta resolution. Determines discretisation step for theta
-
-    Returns
-    -------
-    theta : np.array
-        Empty array representing theta dimension
-    rho : np.array
-        Empty array representing rho dimension
-
-    '''
-    theta = np.linspace(-90.0, 90.0, int(np.ceil(90.0/theta_res) + 1.0))
-    #theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
-    D = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
-    q = np.ceil(D/rho_res)
-    nrho = int(2*q + 1)
-    rho = np.linspace(-q*rho_res, q*rho_res, nrho)
     return theta, rho
 
 def fill_hs_acc(empty_acc, points, rho, theta):
@@ -299,7 +269,7 @@ def enhance_hs_acc(ht_acc, rho, theta):
     C_enh = h*w*(ht_acc**2)/C_integr
     return C_enh
 
-def hough_transform(points, enhanced, theta_res=1.0, rho_res=1.0):
+def hough_transform(points, theta_res=1.0, rho_res=1.0):
     """
     Parameters
     ----------
@@ -325,21 +295,15 @@ def hough_transform(points, enhanced, theta_res=1.0, rho_res=1.0):
     theta_T : float
         A theta threshold required for further computation
     """
-    if enhanced:
-        x_max, y_max = find_max_points(points)
-        theta, rho = create_rho_theta_enh(x_max, y_max, rho_res)
-    else:
-        x_max, y_max = find_max_points(points)
-        theta, rho = create_rho_theta_normal(x_max, y_max, rho_res, theta_res)
+    x_max, y_max = find_max_points(points)
+    theta, rho = create_rho_theta(x_max, y_max, rho_res)
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
     theta_T = 3 * 180/(2*(y_max - 1)) # Create a theta threshold
-    if enhanced:
-        ht_acc = enhance_hs_acc(ht_acc, rho, theta)
-    ht_acc_T = np.amax(ht_acc) * 0.6 # Create an accumulator threshold
-    return theta, rho, ht_acc, theta_T, ht_acc_T
+    ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta)
+    return theta, rho, ht_acc, ht_acc_enh, theta_T
 
-def find_peaks(ht_acc, ht_acc_T, rhos, thetas):
+def find_peaks(ht_acc_enh, rhos, thetas):
     '''
     
 
@@ -359,18 +323,24 @@ def find_peaks(ht_acc, ht_acc_T, rhos, thetas):
     list
         Top n rho theta pairs in H by accumulator value
         '''
-    flat = list(set(np.hstack(ht_acc)))
-    flat = np.delete(flat, np.argwhere(flat < ht_acc_T))
-    flat_sorted = sorted(flat)
-    coords_sorted = [(np.argwhere(ht_acc == acc_value)) for acc_value in flat_sorted]
     rho_theta = []
-    for coords_for_val_idx in range(0, len(coords_sorted), 1):
-      coords_for_val = coords_sorted[coords_for_val_idx]
-      for idx in range(0, len(coords_for_val), 1):
-        k,m = coords_for_val[idx] # k by m matrix
-        rho = rhos[k]
-        theta = thetas[m]
-        rho_theta.append([rho, theta])
+    frac_t = 1
+    while len(rho_theta) < 4: # Infinity loop?
+        ht_acc_T = np.amax(ht_acc_enh) * frac_t # Create an accumulator threshold
+        flat = list(set(np.hstack(ht_acc_enh)))
+        flat = np.delete(flat, np.argwhere(flat < ht_acc_T))
+        flat_sorted = sorted(flat)
+        coords_sorted = [(np.argwhere(ht_acc_enh == acc_value)) for acc_value in flat_sorted]
+        rho_theta = []
+        for coords_for_val_idx in range(0, len(coords_sorted), 1):
+          coords_for_val = coords_sorted[coords_for_val_idx]
+          for idx in range(0, len(coords_for_val), 1):
+            k,m = coords_for_val[idx] # k by m matrix
+            rho = rhos[k]
+            theta = thetas[m]
+            rho_theta.append([rho, theta])
+        frac_t = frac_t*0.9
+    print ("ht_acc_T:", ht_acc_T)
     return rho_theta
 
 def peaks_to_dict(peak_pairs):
@@ -414,8 +384,6 @@ def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, theta_T, len_T = 0.5):
         cur_idx = peaks.index(current_peak)
         for compare_peak in peaks[cur_idx + 1:]:
             rho1, theta1 = current_peak
-            # Test Print
-            print (rho1, theta1)
             rho2, theta2 = compare_peak
             acc_idx1 = [np.where(rhos == rho1), np.where(thetas == theta1)]
             acc_idx2 = [np.where(rhos == rho2), np.where(thetas == theta2)]
@@ -468,8 +436,9 @@ def vert_dist_is_valid(peak1, peak2):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2) * math.pi / 180.0
-    vert_dist_cond1 = abs(ksi11 - ksi12) == C1 * math.sin(ang_dif)
-    vert_dist_cond2 = abs(ksi21 - ksi22) == C2 * math.sin(ang_dif)
+    vert_dist_cond1 = abs(ksi11 - ksi12) - C1 * math.sin(ang_dif) < 0.001
+    print (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif))
+    vert_dist_cond2 = abs(ksi21 - ksi22) - C2 * math.sin(ang_dif) < 0.001
     if vert_dist_cond1 and vert_dist_cond2:
         return [True, ang_dif]
     return [False, ang_dif]
@@ -480,8 +449,17 @@ def find_valid_peaks_pair(peaks):
         for other_peak in peaks[cur_idx + 1:]:
             if vert_dist_is_valid(current_peak, other_peak)[0]:
                 return [current_peak, other_peak]
-            
-def run_algorithm(figure, enh = True):
+
+def find_intersection(line1, line2):  
+    rho1, theta1 = line1
+    rho2, theta2 = line2
+    print (rho1, theta1)
+    a_matrix = np.array([[math.cos(theta1), math.sin(theta1)], [math.cos(theta2), math.sin(theta2)]])
+    b_matrix = np.array([rho1, rho2])
+    x_y = np.linalg.solve(a_matrix, b_matrix)
+    return x_y
+    
+def run_algorithm(figure):
     '''
     
 
@@ -509,18 +487,34 @@ def run_algorithm(figure, enh = True):
         DESCRIPTION. x and y coordinates corresponding to sinusoids in Hough Space
     
     '''
+    valid_peaks = None
+    rho_res = 1.0
+    theta_res = 1.0
     figure = assign_figure(figure)
-    thetas, rhos, ht_acc, theta_T, ht_acc_T = hough_transform(figure, enh)
-    rho_theta_pairs= find_peaks(ht_acc,ht_acc_T, rhos, thetas)
-    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
-    extended_peaks = gen_extended_peaks(cooriented_peaks)
-    valid_peaks = find_valid_peaks_pair(extended_peaks)
-    return thetas, rhos, ht_acc, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks
+    while valid_peaks == None:
+        thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, theta_res, rho_res)
+        rho_theta_pairs= find_peaks(ht_acc_enh, rhos, thetas)
+        cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
+        extended_peaks = gen_extended_peaks(cooriented_peaks)
+        valid_peaks = find_valid_peaks_pair(extended_peaks)
+        theta_res = 1.1 * theta_res
+        rho_res = rho_res * 1.1
+    print (rho_res)
+    side1 = [valid_peaks[0]["ksi1"], valid_peaks[0]["beta"]]
+    side2 = [valid_peaks[0]["ksi2"], valid_peaks[0]["beta"]]
+    side3 = [valid_peaks[1]["ksi1"], valid_peaks[1]["beta"]]
+    side4 = [valid_peaks[1]["ksi2"], valid_peaks[1]["beta"]]
+    x1_y1 = find_intersection(side1, side3)
+    x2_y2 = find_intersection(side1, side4)
+    x3_y3 = find_intersection(side2, side3)
+    x4_y4 = find_intersection(side2, side4)
+    vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
+    return thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices
 
 #================================================TEST CASES=======================================================
 
 #Square
-thetas, rhos, C_ench, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks= run_algorithm("square")
+thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm("example 1")
 
 
 
