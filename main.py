@@ -322,7 +322,6 @@ def hough_transform(points, enhanced, theta_res=1.0, rho_res=1.0):
         accumulating "voices" for each point in this space.
     C_ench : np.array
         Enchanced version of Hough Accumulator
-        
     theta_T : float
         A theta threshold required for further computation
     """
@@ -332,14 +331,15 @@ def hough_transform(points, enhanced, theta_res=1.0, rho_res=1.0):
     else:
         x_max, y_max = find_max_points(points)
         theta, rho = create_rho_theta_normal(x_max, y_max, rho_res, theta_res)
-    C = np.zeros((len(rho), len(theta)))
-    fill_hs_acc(C, points, rho, theta)
+    ht_acc = np.zeros((len(rho), len(theta)))
+    fill_hs_acc(ht_acc, points, rho, theta)
     theta_T = 3 * 180/(2*(y_max - 1)) # Create a theta threshold
     if enhanced:
-        C = enhance_hs_acc(C, rho, theta)
-    return theta, rho, C, theta_T
+        ht_acc = enhance_hs_acc(ht_acc, rho, theta)
+    ht_acc_T = np.amax(ht_acc) * 0.6 # Create an accumulator threshold
+    return theta, rho, ht_acc, theta_T, ht_acc_T
 
-def top_n_rho_theta_pairs(ht_acc, n, rhos, thetas):
+def find_peaks(ht_acc, ht_acc_T, rhos, thetas):
     '''
     
 
@@ -359,12 +359,11 @@ def top_n_rho_theta_pairs(ht_acc, n, rhos, thetas):
     list
         Top n rho theta pairs in H by accumulator value
         '''
-    
     flat = list(set(np.hstack(ht_acc)))
-    flat_sorted = sorted(flat, key = lambda n: -n) 
-    coords_sorted = [(np.argwhere(ht_acc == acc_value)) for acc_value in flat_sorted[0:n]]
+    flat = np.delete(flat, np.argwhere(flat < ht_acc_T))
+    flat_sorted = sorted(flat)
+    coords_sorted = [(np.argwhere(ht_acc == acc_value)) for acc_value in flat_sorted]
     rho_theta = []
-    x_y = [] 
     for coords_for_val_idx in range(0, len(coords_sorted), 1):
       coords_for_val = coords_sorted[coords_for_val_idx]
       for idx in range(0, len(coords_for_val), 1):
@@ -372,10 +371,7 @@ def top_n_rho_theta_pairs(ht_acc, n, rhos, thetas):
         rho = rhos[k]
         theta = thetas[m]
         rho_theta.append([rho, theta])
-        x_y.append([k, n]) # just to unnest and reorder coords_sorted
-    return [rho_theta[0:n], x_y]
-
-
+    return rho_theta
 
 def peaks_to_dict(peak_pairs):
     peaks_dict_list = []
@@ -387,7 +383,7 @@ def peaks_to_dict(peak_pairs):
         peaks_dict_list.append(temp_dict)
     return peaks_dict_list
 
-def choose_peaks(ht_acc, peaks, rhos, thetas, theta_T, len_T = 0.5):
+def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, theta_T, len_T = 0.5):
     """
 
     Parameters
@@ -413,21 +409,23 @@ def choose_peaks(ht_acc, peaks, rhos, thetas, theta_T, len_T = 0.5):
         Pairs of peaks occuring at the same orientation theta, and with similar heights.
 
     """
-    satisfying_pairs = []
+    cooriented_pairs = []
     for current_peak in peaks[:-1]:
         cur_idx = peaks.index(current_peak)
         for compare_peak in peaks[cur_idx + 1:]:
             rho1, theta1 = current_peak
+            # Test Print
+            print (rho1, theta1)
             rho2, theta2 = compare_peak
             acc_idx1 = [np.where(rhos == rho1), np.where(thetas == theta1)]
             acc_idx2 = [np.where(rhos == rho2), np.where(thetas == theta2)]
             acc_value1 = ht_acc[acc_idx1[0], acc_idx1[1]]
             acc_value2 = ht_acc[acc_idx2[0], acc_idx2[1]]
             is_parallel = abs(theta1 - theta2) < theta_T
-            is_apropriate_dist = abs(acc_value1- acc_value2) < len_T * (acc_value1 + acc_value2) / 2
+            is_apropriate_dist = abs(acc_value1- acc_value2) < len_T * (acc_value1 + acc_value2) * 0.5
             if is_parallel and is_apropriate_dist:
-                satisfying_pairs.append([current_peak, float(acc_value1), compare_peak, float(acc_value2)])
-    return peaks_to_dict(satisfying_pairs)
+                cooriented_pairs.append([current_peak, float(acc_value1), compare_peak, float(acc_value2)])
+    return peaks_to_dict(cooriented_pairs)
 
 def find_x_y(rho1, theta1, rho2, theta2):
     theta1 = theta1 * math.pi / 180
@@ -473,14 +471,7 @@ def vert_dist_is_valid(peak1, peak2):
     vert_dist_cond1 = abs(ksi11 - ksi12) == C1 * math.sin(ang_dif)
     vert_dist_cond2 = abs(ksi21 - ksi22) == C2 * math.sin(ang_dif)
     if vert_dist_cond1 and vert_dist_cond2:
-        print (ksi11 - ksi12)
-        print ("Differense 1: ", abs(ksi11 - ksi12) - C1 * math.sin(ang_dif))
-        print ("Differense 2: ", abs(ksi21 - ksi22) - C2 * math.sin(ang_dif))
         return [True, ang_dif]
-    else:
-        print (ksi11 - ksi12)
-        print ("Differense 1: ", abs(ksi11 - ksi12) - C1 * math.sin(ang_dif))
-        print ("Differense 2: ", abs(ksi21 - ksi22) - C2 * math.sin(ang_dif))
     return [False, ang_dif]
 
 def find_valid_peaks_pair(peaks):
@@ -519,34 +510,17 @@ def run_algorithm(figure, enh = True):
     
     '''
     figure = assign_figure(figure)
-    thetas, rhos, C, theta_T = hough_transform(figure, enh)
-    rho_theta_pairs, x_y_pairs= top_n_rho_theta_pairs(C, 4, rhos, thetas)
-    satisfying_pairs = choose_peaks(C, rho_theta_pairs, rhos, thetas, theta_T)
-    x1_y1 = find_x_y(satisfying_pairs[0]["rhos"][0], 
-                     satisfying_pairs[0]["thetas"][0], 
-                     satisfying_pairs[1]["rhos"][0], 
-                     satisfying_pairs[1]["thetas"][0])
-    x2_y2 = find_x_y(satisfying_pairs[0]["rhos"][0], 
-                     satisfying_pairs[0]["thetas"][0], 
-                     satisfying_pairs[1]["rhos"][1], 
-                     satisfying_pairs[1]["thetas"][1])
-    x3_y3 = find_x_y(satisfying_pairs[0]["rhos"][1], 
-                     satisfying_pairs[0]["thetas"][1], 
-                     satisfying_pairs[1]["rhos"][0], 
-                     satisfying_pairs[1]["thetas"][0])
-    x4_y4 = find_x_y(satisfying_pairs[0]["rhos"][1], 
-                     satisfying_pairs[0]["thetas"][1], 
-                     satisfying_pairs[1]["rhos"][1], 
-                     satisfying_pairs[1]["thetas"][1])
-    vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
-    #extended_peaks = gen_extended_peaks(satisfying_pairs)
-    #valid_peaks = find_valid_peaks_pair(extended_peaks)
-    return thetas, rhos, C, rho_theta_pairs, x_y_pairs, satisfying_pairs, vertices
+    thetas, rhos, ht_acc, theta_T, ht_acc_T = hough_transform(figure, enh)
+    rho_theta_pairs= find_peaks(ht_acc,ht_acc_T, rhos, thetas)
+    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
+    extended_peaks = gen_extended_peaks(cooriented_peaks)
+    valid_peaks = find_valid_peaks_pair(extended_peaks)
+    return thetas, rhos, ht_acc, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks
 
 #================================================TEST CASES=======================================================
 
 #Square
-thetas, rhos, C_ench, rho_theta_pairs, x_y_pairs, satisfying_pairs, vertices= run_algorithm("square")
+thetas, rhos, C_ench, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks= run_algorithm("square")
 
 
 
