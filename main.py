@@ -339,8 +339,7 @@ def find_peaks(ht_acc_enh, rhos, thetas):
             rho = rhos[k]
             theta = thetas[m]
             rho_theta.append([rho, theta])
-        frac_t = frac_t*0.9
-    print ("ht_acc_T:", ht_acc_T)
+        frac_t = frac_t*0.9 
     return rho_theta
 
 def peaks_to_dict(peak_pairs):
@@ -436,11 +435,12 @@ def vert_dist_is_valid(peak1, peak2):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2) * math.pi / 180.0
-    vert_dist_cond1 = abs(ksi11 - ksi12) - C1 * math.sin(ang_dif) < 0.001
-    print (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif))
-    vert_dist_cond2 = abs(ksi21 - ksi22) - C2 * math.sin(ang_dif) < 0.001
+    vert_dist_cond1 = abs(ksi11 - ksi12) == C1 * math.sin(ang_dif)
+    vert_dist_cond2 = abs(ksi21 - ksi22) == C2 * math.sin(ang_dif)
     if vert_dist_cond1 and vert_dist_cond2:
         return [True, ang_dif]
+    print ("Difference1: ", abs(ksi11 - ksi12) - C1 * math.sin(ang_dif))
+    print ("Difference2: ", abs(ksi21 - ksi22) - C2 * math.sin(ang_dif))
     return [False, ang_dif]
 
 def find_valid_peaks_pair(peaks):
@@ -453,13 +453,14 @@ def find_valid_peaks_pair(peaks):
 def find_intersection(line1, line2):  
     rho1, theta1 = line1
     rho2, theta2 = line2
-    print (rho1, theta1)
+    theta1 = theta1 * math.pi / 180.0
+    theta2 = theta2 * math.pi / 180.0
     a_matrix = np.array([[math.cos(theta1), math.sin(theta1)], [math.cos(theta2), math.sin(theta2)]])
     b_matrix = np.array([rho1, rho2])
     x_y = np.linalg.solve(a_matrix, b_matrix)
     return x_y
     
-def run_algorithm(figure):
+def run_algorithm(figure, rho_res = 0.5, theta_res = 0.5):
     '''
     
 
@@ -488,33 +489,30 @@ def run_algorithm(figure):
     
     '''
     valid_peaks = None
-    rho_res = 1.0
-    theta_res = 1.0
     figure = assign_figure(figure)
-    while valid_peaks == None:
-        thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, theta_res, rho_res)
-        rho_theta_pairs= find_peaks(ht_acc_enh, rhos, thetas)
-        cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
-        extended_peaks = gen_extended_peaks(cooriented_peaks)
-        valid_peaks = find_valid_peaks_pair(extended_peaks)
-        theta_res = 1.1 * theta_res
-        rho_res = rho_res * 1.1
-    print (rho_res)
-    side1 = [valid_peaks[0]["ksi1"], valid_peaks[0]["beta"]]
-    side2 = [valid_peaks[0]["ksi2"], valid_peaks[0]["beta"]]
-    side3 = [valid_peaks[1]["ksi1"], valid_peaks[1]["beta"]]
-    side4 = [valid_peaks[1]["ksi2"], valid_peaks[1]["beta"]]
-    x1_y1 = find_intersection(side1, side3)
-    x2_y2 = find_intersection(side1, side4)
-    x3_y3 = find_intersection(side2, side3)
-    x4_y4 = find_intersection(side2, side4)
-    vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
-    return thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices
+    thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, theta_res, rho_res)
+    rho_theta_pairs= find_peaks(ht_acc_enh, rhos, thetas)
+    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
+    valid_peaks = gen_extended_peaks(cooriented_peaks)
+    #valid_peaks = find_valid_peaks_pair(extended_peaks)
+    if valid_peaks != None:
+        side1 = [valid_peaks[0]["ksi1"], valid_peaks[0]["beta"]]
+        side2 = [valid_peaks[0]["ksi2"], valid_peaks[0]["beta"]]
+        side3 = [valid_peaks[1]["ksi1"], valid_peaks[1]["beta"]]
+        side4 = [valid_peaks[1]["ksi2"], valid_peaks[1]["beta"]]
+        x1_y1 = find_intersection(side1, side3)
+        x2_y2 = find_intersection(side1, side4)
+        x3_y3 = find_intersection(side2, side3)
+        x4_y4 = find_intersection(side2, side4)
+        vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
+    else:
+        vertices = None
+    return thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, valid_peaks, vertices
 
 #================================================TEST CASES=======================================================
 
 #Square
-thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm("example 1")
+thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, valid_peaks, vertices = run_algorithm("square")
 
 
 
