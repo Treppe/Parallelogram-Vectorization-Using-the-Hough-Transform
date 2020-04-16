@@ -5,6 +5,10 @@ into a set of four points - an ideal parallelogram.
 
 import numpy as np
 import math
+from matplotlib import pyplot
+from shapely.geometry.polygon import LinearRing
+
+
 def assign_figure(figure_name):
     '''
     
@@ -269,7 +273,7 @@ def enhance_hs_acc(ht_acc, rho, theta):
     C_enh = h*w*(ht_acc**2)/C_integr
     return C_enh
 
-def hough_transform(points, theta_res=1.0, rho_res=1.0):
+def hough_transform(points, theta_res=.5, rho_res=.5):
     """
     Parameters
     ----------
@@ -324,22 +328,23 @@ def find_peaks(ht_acc_enh, rhos, thetas):
         Top n rho theta pairs in H by accumulator value
         '''
     rho_theta = []
-    frac_t = 1
-    while len(rho_theta) < 4: # Infinity loop?
-        ht_acc_T = np.amax(ht_acc_enh) * frac_t # Create an accumulator threshold
-        flat = list(set(np.hstack(ht_acc_enh)))
-        flat = np.delete(flat, np.argwhere(flat < ht_acc_T))
-        flat_sorted = sorted(flat)
-        coords_sorted = [(np.argwhere(ht_acc_enh == acc_value)) for acc_value in flat_sorted]
-        rho_theta = []
-        for coords_for_val_idx in range(0, len(coords_sorted), 1):
-          coords_for_val = coords_sorted[coords_for_val_idx]
-          for idx in range(0, len(coords_for_val), 1):
-            k,m = coords_for_val[idx] # k by m matrix
-            rho = rhos[k]
-            theta = thetas[m]
-            rho_theta.append([rho, theta])
-        frac_t = frac_t*0.9 
+    #frac_t = 1
+    #while len(rho_theta) < 4: # Infinity loop?
+    #ht_acc_T = np.amax(ht_acc_enh) * frac_t # Create an accumulator threshold
+    ht_acc_T = np.amax(ht_acc_enh) * 0.5
+    flat = list(set(np.hstack(ht_acc_enh)))
+    flat = np.delete(flat, np.argwhere(flat < ht_acc_T))
+    flat_sorted = sorted(flat)
+    coords_sorted = [(np.argwhere(ht_acc_enh == acc_value)) for acc_value in flat_sorted]
+    rho_theta = []
+    for coords_for_val_idx in range(0, len(coords_sorted), 1):
+      coords_for_val = coords_sorted[coords_for_val_idx]
+      for idx in range(0, len(coords_for_val), 1):
+        k,m = coords_for_val[idx] # k by m matrix
+        rho = rhos[k]
+        theta = thetas[m]
+        rho_theta.append([rho, theta])
+    #frac_t = frac_t*0.9 
     return rho_theta
 
 def peaks_to_dict(peak_pairs):
@@ -352,7 +357,7 @@ def peaks_to_dict(peak_pairs):
         peaks_dict_list.append(temp_dict)
     return peaks_dict_list
 
-def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, theta_T, len_T = 0.5):
+def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, theta_T, len_T= 0.5):
     """
 
     Parameters
@@ -431,19 +436,17 @@ def gen_extended_peaks(peak_pairs):
         extended_peaks.append(temp_dict)
     return extended_peaks
 
-def vert_dist_is_valid(peak1, peak2):
+def vert_dist_is_valid(peak1, peak2, dist_T = 0.5):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2) * math.pi / 180.0
-    vert_dist_cond1 = abs(ksi11 - ksi12) == C1 * math.sin(ang_dif)
-    vert_dist_cond2 = abs(ksi21 - ksi22) == C2 * math.sin(ang_dif)
-    if vert_dist_cond1 and vert_dist_cond2:
+    vert_dist_cond1 = (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif)) / abs(ksi11 - ksi12)
+    vert_dist_cond2 = (abs(ksi21 - ksi22) - C2 * math.sin(ang_dif)) / abs(ksi21 - ksi22)
+    if max([vert_dist_cond1 , vert_dist_cond2]) < dist_T:
         return [True, ang_dif]
-    print ("Difference1: ", abs(ksi11 - ksi12) - C1 * math.sin(ang_dif))
-    print ("Difference2: ", abs(ksi21 - ksi22) - C2 * math.sin(ang_dif))
     return [False, ang_dif]
 
-def find_valid_peaks_pair(peaks):
+def find_valid_peaks_pair(peaks, dist_T = 0.5):
     for current_peak in peaks[:-1]:
         cur_idx = peaks.index(current_peak)
         for other_peak in peaks[cur_idx + 1:]:
@@ -460,7 +463,7 @@ def find_intersection(line1, line2):
     x_y = np.linalg.solve(a_matrix, b_matrix)
     return x_y
     
-def run_algorithm(figure, rho_res = 0.5, theta_res = 0.5):
+def run_algorithm(figure, rho_res = 1, theta_res = 1, len_T = 0.5, dist_T = 0.5):
     '''
     
 
@@ -489,30 +492,46 @@ def run_algorithm(figure, rho_res = 0.5, theta_res = 0.5):
     
     '''
     valid_peaks = None
+    rho_res = 1.0
+    theta_res = 1.0
     figure = assign_figure(figure)
-    thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, theta_res, rho_res)
-    rho_theta_pairs= find_peaks(ht_acc_enh, rhos, thetas)
-    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
-    valid_peaks = gen_extended_peaks(cooriented_peaks)
-    #valid_peaks = find_valid_peaks_pair(extended_peaks)
-    if valid_peaks != None:
-        side1 = [valid_peaks[0]["ksi1"], valid_peaks[0]["beta"]]
-        side2 = [valid_peaks[0]["ksi2"], valid_peaks[0]["beta"]]
-        side3 = [valid_peaks[1]["ksi1"], valid_peaks[1]["beta"]]
-        side4 = [valid_peaks[1]["ksi2"], valid_peaks[1]["beta"]]
-        x1_y1 = find_intersection(side1, side3)
-        x2_y2 = find_intersection(side1, side4)
-        x3_y3 = find_intersection(side2, side3)
-        x4_y4 = find_intersection(side2, side4)
-        vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
-    else:
-        vertices = None
-    return thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, valid_peaks, vertices
+    while valid_peaks == None:
+        thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, theta_res, rho_res)
+        rho_theta_pairs= find_peaks(ht_acc_enh, rhos, thetas)
+        cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T, len_T)
+        extended_peaks = gen_extended_peaks(cooriented_peaks)
+        valid_peaks = find_valid_peaks_pair(extended_peaks, dist_T)
+        theta_res = 1.1 * theta_res
+        rho_res = rho_res * 1.1
+    side1 = [valid_peaks[0]["ksi1"], valid_peaks[0]["beta"]]
+    side2 = [valid_peaks[0]["ksi2"], valid_peaks[0]["beta"]]
+    side3 = [valid_peaks[1]["ksi1"], valid_peaks[1]["beta"]]
+    side4 = [valid_peaks[1]["ksi2"], valid_peaks[1]["beta"]]
+    x1_y1 = find_intersection(side1, side4)
+    x2_y2 = find_intersection(side1, side3)
+    x3_y3 = find_intersection(side2, side3)
+    x4_y4 = find_intersection(side2, side4)
+    vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
+    return thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices
+
 
 #================================================TEST CASES=======================================================
 
 #Square
-thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, valid_peaks, vertices = run_algorithm("square")
+thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm("example 3", dist_T = 0.5)
 
+ring1 = LinearRing(assign_figure("example 3"))
+x1, y1 = ring1.xy
+ring2 = LinearRing(vertices)
+x2, y2= ring2.xy
 
+fig = pyplot.figure(1, figsize=(5,5), dpi=90)
+example = fig.add_subplot(111)
+example.plot(x1, y1)
+example.set_title('Polygon Edges')
 
+ans = fig.add_subplot(111)
+ans.plot(x2, y2)
+ans.set_title('Polygon Edges')
+
+    
