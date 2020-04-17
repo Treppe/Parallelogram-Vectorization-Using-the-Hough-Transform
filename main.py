@@ -9,13 +9,13 @@ from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
 # Assign thresholds
-START_MIN_ACCEPT_HEIGHT = 10
+START_MIN_ACCEPT_HEIGHT = 4
 LENGHT_T = 0.5
 DIST_T = 0.5
 RHO_RES = 1
 THETA_RES = 1
 # Choose figure to run
-FIGURE = "example 3"
+FIGURE = "example 1"
 
 def assign_figure(figure_name):
     '''
@@ -264,6 +264,7 @@ def fill_hs_acc(empty_acc, points, rho, theta):
                     y*math.sin(theta[thIdx]*math.pi/180.0)
             rhoIdx = np.nonzero(np.abs(rho-rhoVal) == np.min(np.abs(rho-rhoVal)))[0]
             empty_acc[rhoIdx, thIdx] += 1
+    return empty_acc            
 
 def enhance_hs_acc(ht_acc, rho, theta):
     """
@@ -283,11 +284,14 @@ def enhance_hs_acc(ht_acc, rho, theta):
         Enhansed version of C used to extract highest peaks more easily
 
     """
-    h = len(rho)
-    w = len(theta)
-    C_integr = np.sum(ht_acc[int(h*0.25):int(h*0.75), int(w*0.25):int(w*0.75)])
-    C_enh = h*w*(ht_acc**2)/C_integr
+    '''
+    if empty_acc[rhoIdx, thIdx] == 0:
+                empty_acc[rhoIdx, thIdx] += 1
+            else:
+                empty_acc[rhoIdx, thIdx] += 1 + 0.1 * empty_acc[rhoIdx, thIdx]
     return C_enh
+    '''
+    pass
 
 def hough_transform(points):
     """
@@ -543,7 +547,7 @@ x2, y2= ring2.xy
 
 fig = pyplot.figure(1, figsize=(5,5), dpi=90)
 example = fig.add_subplot(111)
-example.plot(x1, y1)
+example.plot(x1, y1, marker = 'o')
 example.set_title(FIGURE)
 
 ans = fig.add_subplot(111)
