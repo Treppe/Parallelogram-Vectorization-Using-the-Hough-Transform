@@ -8,6 +8,7 @@ import math
 from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
+MIN_ACCEPT_HIGHT = 4
 
 def assign_figure(figure_name):
     '''
@@ -331,7 +332,8 @@ def find_peaks(ht_acc_enh, rhos, thetas):
     #frac_t = 1
     #while len(rho_theta) < 4: # Infinity loop?
     #ht_acc_T = np.amax(ht_acc_enh) * frac_t # Create an accumulator threshold
-    ht_acc_T = np.amax(ht_acc_enh) * 0.5
+    #ht_acc_T = np.amax(ht_acc_enh)
+    ht_acc_T = np.array(MIN_ACCEPT_HIGHT)
     flat = list(set(np.hstack(ht_acc_enh)))
     flat = np.delete(flat, np.argwhere(flat < ht_acc_T))
     flat_sorted = sorted(flat)
@@ -440,6 +442,8 @@ def vert_dist_is_valid(peak1, peak2, dist_T = 0.5):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2) * math.pi / 180.0
+    if (ksi11 - ksi12) == 0 or (ksi21 - ksi22) == 0:
+        return [False, ang_dif]
     vert_dist_cond1 = (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif)) / abs(ksi11 - ksi12)
     vert_dist_cond2 = (abs(ksi21 - ksi22) - C2 * math.sin(ang_dif)) / abs(ksi21 - ksi22)
     if max([vert_dist_cond1 , vert_dist_cond2]) < dist_T:
@@ -497,7 +501,7 @@ def run_algorithm(figure, rho_res = 1, theta_res = 1, len_T = 0.5, dist_T = 0.5)
     figure = assign_figure(figure)
     while valid_peaks == None:
         thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, theta_res, rho_res)
-        rho_theta_pairs= find_peaks(ht_acc_enh, rhos, thetas)
+        rho_theta_pairs= find_peaks(ht_acc, rhos, thetas)
         cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T, len_T)
         extended_peaks = gen_extended_peaks(cooriented_peaks)
         valid_peaks = find_valid_peaks_pair(extended_peaks, dist_T)
@@ -516,11 +520,11 @@ def run_algorithm(figure, rho_res = 1, theta_res = 1, len_T = 0.5, dist_T = 0.5)
 
 
 #================================================TEST CASES=======================================================
-
+figure = "example 3"
 #Square
-thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm("square", dist_T = 0.8)
+thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm(figure, dist_T = 0.8)
 
-ring1 = LinearRing(assign_figure("square"))
+ring1 = LinearRing(assign_figure(figure))
 x1, y1 = ring1.xy
 ring2 = LinearRing(vertices)
 x2, y2= ring2.xy
