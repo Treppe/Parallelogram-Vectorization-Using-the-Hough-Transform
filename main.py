@@ -10,8 +10,8 @@ from shapely.geometry.polygon import LinearRing
 
 # Assign thresholds
 MIN_ACCEPT_HIGHT = 7
-LENGHT_T = 0.5
-DIST_T = 0.5
+LENGHT_T = 0.3
+DIST_T = 0.3
 
 # Choose figure to run
 FIGURE = "example 3"
@@ -197,7 +197,7 @@ def find_max_points(points):
     y_max = np.ceil(np.amax(points[:, 1]))
     return x_max, y_max
 
-def create_rho_theta(x_max, y_max, rho_res):
+def create_rho_theta(x_max, y_max, rho_res = 1, theta_res = 1):
     """
     Helper function for Hough Transform
     Creates rho and theta dimension for enchaced Hough accumulator
@@ -221,12 +221,20 @@ def create_rho_theta(x_max, y_max, rho_res):
     """
    
     # Making theta dimension
-    d_theta= 180/(2*(y_max - 1))
-    theta = np.arange(-90, 90, d_theta)
+    #d_theta= 180/(2*(y_max - 1))
+    #theta = np.arange(-90, 90, d_theta)
     # Making rho dimension:
-    max_dist = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
-    fac = np.ceil(max_dist/rho_res) # resolution factor
-    rho = np.arange(-fac * rho_res, fac * rho_res, math.pi/4)
+    #max_dist = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
+    #fac = np.ceil(max_dist/rho_res) # resolution factor
+    #rho = np.arange(-fac * rho_res, fac * rho_res, math.pi/4)
+    
+    theta = np.linspace(-90.0, 0.0, math.ceil(90.0/theta_res) + 1)
+    theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
+
+    D = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
+    q = math.ceil(D/rho_res)
+    nrho = 2*q + 1
+    rho = np.linspace(-q*rho_res, q*rho_res, nrho)
     return theta, rho
 
 def fill_hs_acc(empty_acc, points, rho, theta):
