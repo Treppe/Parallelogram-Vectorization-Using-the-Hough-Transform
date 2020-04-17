@@ -8,7 +8,13 @@ import math
 from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
-MIN_ACCEPT_HIGHT = 4
+# Assign thresholds
+MIN_ACCEPT_HIGHT = 7
+LENGHT_T = 0.5
+DIST_T = 0.5
+
+# Choose figure to run
+FIGURE = "example 3"
 
 def assign_figure(figure_name):
     '''
@@ -220,7 +226,7 @@ def create_rho_theta(x_max, y_max, rho_res):
     # Making rho dimension:
     max_dist = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
     fac = np.ceil(max_dist/rho_res) # resolution factor
-    rho = np.arange(-fac*rho_res, fac*rho_res, math.pi/4)
+    rho = np.arange(-fac * rho_res, fac * rho_res, math.pi/4)
     return theta, rho
 
 def fill_hs_acc(empty_acc, points, rho, theta):
@@ -274,7 +280,7 @@ def enhance_hs_acc(ht_acc, rho, theta):
     C_enh = h*w*(ht_acc**2)/C_integr
     return C_enh
 
-def hough_transform(points, theta_res=.5, rho_res=.5):
+def hough_transform(points, rho_res):
     """
     Parameters
     ----------
@@ -359,7 +365,7 @@ def peaks_to_dict(peak_pairs):
         peaks_dict_list.append(temp_dict)
     return peaks_dict_list
 
-def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, theta_T, len_T= 0.5):
+def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, theta_T):
     """
 
     Parameters
@@ -396,7 +402,7 @@ def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, theta_T, len_T= 0.5):
             acc_value1 = ht_acc[acc_idx1[0], acc_idx1[1]]
             acc_value2 = ht_acc[acc_idx2[0], acc_idx2[1]]
             is_parallel = abs(theta1 - theta2) < theta_T
-            is_apropriate_dist = abs(acc_value1- acc_value2) < len_T * (acc_value1 + acc_value2) * 0.5
+            is_apropriate_dist = abs(acc_value1- acc_value2) < LENGHT_T * (acc_value1 + acc_value2) * 0.5
             if is_parallel and is_apropriate_dist:
                 cooriented_pairs.append([current_peak, float(acc_value1), compare_peak, float(acc_value2)])
     return peaks_to_dict(cooriented_pairs)
@@ -442,7 +448,7 @@ def vert_dist_is_valid(peak1, peak2, dist_T = 0.5):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2) * math.pi / 180.0
-    if (ksi11 - ksi12) == 0 or (ksi21 - ksi22) == 0:
+    if (ksi11 - ksi12) < MIN_ACCEPT_HIGHT or (ksi21 - ksi22) < MIN_ACCEPT_HIGHT:
         return [False, ang_dif]
     vert_dist_cond1 = (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif)) / abs(ksi11 - ksi12)
     vert_dist_cond2 = (abs(ksi21 - ksi22) - C2 * math.sin(ang_dif)) / abs(ksi21 - ksi22)
@@ -450,11 +456,11 @@ def vert_dist_is_valid(peak1, peak2, dist_T = 0.5):
         return [True, ang_dif]
     return [False, ang_dif]
 
-def find_valid_peaks_pair(peaks, dist_T = 0.5):
+def find_valid_peaks_pair(peaks):
     for current_peak in peaks[:-1]:
         cur_idx = peaks.index(current_peak)
         for other_peak in peaks[cur_idx + 1:]:
-            if vert_dist_is_valid(current_peak, other_peak, dist_T)[0]:
+            if vert_dist_is_valid(current_peak, other_peak, DIST_T)[0]:
                 return [current_peak, other_peak]
 
 def find_intersection(line1, line2):  
@@ -467,7 +473,7 @@ def find_intersection(line1, line2):
     x_y = np.linalg.solve(a_matrix, b_matrix)
     return x_y
     
-def run_algorithm(figure, rho_res = 1, theta_res = 1, len_T = 0.5, dist_T = 0.5):
+def run_algorithm(figure):
     '''
     
 
@@ -497,16 +503,12 @@ def run_algorithm(figure, rho_res = 1, theta_res = 1, len_T = 0.5, dist_T = 0.5)
     '''
     valid_peaks = None
     rho_res = 1.0
-    theta_res = 1.0
     figure = assign_figure(figure)
-    while valid_peaks == None:
-        thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, theta_res, rho_res)
-        rho_theta_pairs= find_peaks(ht_acc, rhos, thetas)
-        cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T, len_T)
-        extended_peaks = gen_extended_peaks(cooriented_peaks)
-        valid_peaks = find_valid_peaks_pair(extended_peaks, dist_T)
-        theta_res = 1.1 * theta_res
-        rho_res = rho_res * 1.1
+    thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, rho_res)
+    rho_theta_pairs= find_peaks(ht_acc, rhos, thetas)
+    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
+    extended_peaks = gen_extended_peaks(cooriented_peaks)
+    valid_peaks = find_valid_peaks_pair(extended_peaks)
     side1 = [valid_peaks[0]["ksi1"], valid_peaks[0]["beta"]]
     side2 = [valid_peaks[0]["ksi2"], valid_peaks[0]["beta"]]
     side3 = [valid_peaks[1]["ksi1"], valid_peaks[1]["beta"]]
@@ -520,11 +522,10 @@ def run_algorithm(figure, rho_res = 1, theta_res = 1, len_T = 0.5, dist_T = 0.5)
 
 
 #================================================TEST CASES=======================================================
-figure = "example 3"
 #Square
-thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm(figure, dist_T = 0.8)
+thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm(FIGURE)
 
-ring1 = LinearRing(assign_figure(figure))
+ring1 = LinearRing(assign_figure(FIGURE))
 x1, y1 = ring1.xy
 ring2 = LinearRing(vertices)
 x2, y2= ring2.xy
@@ -532,10 +533,10 @@ x2, y2= ring2.xy
 fig = pyplot.figure(1, figsize=(5,5), dpi=90)
 example = fig.add_subplot(111)
 example.plot(x1, y1)
-example.set_title('Polygon Edges')
+example.set_title(FIGURE)
 
 ans = fig.add_subplot(111)
 ans.plot(x2, y2)
-ans.set_title('Polygon Edges')
+ans.set_title(FIGURE)
 
     
