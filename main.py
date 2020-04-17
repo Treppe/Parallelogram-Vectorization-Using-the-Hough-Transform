@@ -9,13 +9,19 @@ from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
 # Assign thresholds
-START_MIN_ACCEPT_HEIGHT = 4
+START_MIN_ACCEPT_HEIGHT = 10
 LENGHT_T = 0.5
 DIST_T = 0.5
-RHO_RES = 1
-THETA_RES = 1
+RHO_RES = 0.3
+THETA_RES = 0.3
 # Choose figure to run
-FIGURE = "example 1"
+FIGURE = "example 3"
+print ("START_MIN_ACCEPT_HEIGHT: ", START_MIN_ACCEPT_HEIGHT)
+print ("LENGHT_T: ", LENGHT_T)
+print ("DIST_T: ", DIST_T)
+print ("RHO_RES: ", RHO_RES)
+print ("THETA_RES: ", THETA_RES)
+print ("FIGURE: ", FIGURE)
 
 def assign_figure(figure_name):
     '''
@@ -266,7 +272,7 @@ def fill_hs_acc(empty_acc, points, rho, theta):
             empty_acc[rhoIdx, thIdx] += 1
     return empty_acc            
 
-def enhance_hs_acc(ht_acc, rho, theta):
+def enhance_hs_acc(ht_acc, rho, theta, ht_acc_T, d_theta):
     """
 
     Parameters
@@ -291,9 +297,17 @@ def enhance_hs_acc(ht_acc, rho, theta):
                 empty_acc[rhoIdx, thIdx] += 1 + 0.1 * empty_acc[rhoIdx, thIdx]
     return C_enh
     '''
-    pass
-
-def hough_transform(points):
+    ht_acc_enh = np.array(ht_acc)
+    idxes = np.argwhere(ht_acc_enh >= ht_acc_T)
+    h = 5
+    w = 5
+    for row_col in idxes:
+        mask_origin = (row_col[0] - h, row_col[1] - w)
+        integer = np.sum(ht_acc_enh[mask_origin[0] : mask_origin[0] + h, mask_origin[1] : mask_origin[1] + w])
+        if integer != 0:
+            ht_acc_enh[row_col[0], row_col[1]] = h * w *  ht_acc_enh[row_col[0], row_col[1]] ** 2 / integer
+    return ht_acc_enh
+def hough_transform(points, ht_acc_T):
     """
     Parameters
     ----------
@@ -323,9 +337,9 @@ def hough_transform(points):
     theta, rho = create_rho_theta(x_max, y_max)
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
-    theta_T = 3 * 180/(2*(y_max - 1)) # Create a theta threshold
-    ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta)
-    return theta, rho, ht_acc, ht_acc_enh, theta_T
+    theta_T = THETA_RES * 3  # Create a theta threshold
+    #ht_acc_enh = None
+    return theta, rho, ht_acc, theta_T
 
 def find_peaks(ht_acc_enh, rhos, thetas, ht_acc_T):
     '''
@@ -414,8 +428,8 @@ def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, theta_T):
             acc_value1 = ht_acc[acc_idx1[0], acc_idx1[1]]
             acc_value2 = ht_acc[acc_idx2[0], acc_idx2[1]]
             is_parallel = abs(theta1 - theta2) < theta_T
-            is_apropriate_dist = abs(acc_value1- acc_value2) < LENGHT_T * (acc_value1 + acc_value2) * 0.5
-            if is_parallel and is_apropriate_dist:
+            is_apropriate_lenght = abs(acc_value1- acc_value2) < LENGHT_T * (acc_value1 + acc_value2) * 0.5
+            if is_parallel and is_apropriate_lenght:
                 cooriented_pairs.append([current_peak, float(acc_value1), compare_peak, float(acc_value2)])
     return peaks_to_dict(cooriented_pairs)
 
@@ -516,8 +530,10 @@ def run_algorithm(figure):
     valid_peaks = None
     cur_min_accept_height = np.array(START_MIN_ACCEPT_HEIGHT)
     figure = assign_figure(figure)
-    while valid_peaks == None:
-        thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure)
+    while valid_peaks == None and cur_min_accept_height  != np.array(2):
+        print ("Hi!")
+        print (cur_min_accept_height)
+        thetas, rhos, ht_acc, theta_T = hough_transform(figure, cur_min_accept_height)
         rho_theta_pairs= find_peaks(ht_acc, rhos, thetas,  cur_min_accept_height)
         cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
         extended_peaks = gen_extended_peaks(cooriented_peaks)
@@ -533,12 +549,12 @@ def run_algorithm(figure):
     x3_y3 = find_intersection(side2, side3)
     x4_y4 = find_intersection(side2, side4)
     vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
-    return thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices
+    return thetas, rhos, ht_acc, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices
 
 
 #================================================TEST CASES=======================================================
 #Square
-thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm(FIGURE)
+thetas, rhos, ht_acc, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm(FIGURE)
 
 ring1 = LinearRing(assign_figure(FIGURE))
 x1, y1 = ring1.xy
