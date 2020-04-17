@@ -9,10 +9,11 @@ from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
 # Assign thresholds
-MIN_ACCEPT_HIGHT = 7
-LENGHT_T = 0.3
-DIST_T = 0.3
-
+START_MIN_ACCEPT_HEIGHT = 10
+LENGHT_T = 0.5
+DIST_T = 0.5
+RHO_RES = 1
+THETA_RES = 1
 # Choose figure to run
 FIGURE = "example 3"
 
@@ -197,7 +198,7 @@ def find_max_points(points):
     y_max = np.ceil(np.amax(points[:, 1]))
     return x_max, y_max
 
-def create_rho_theta(x_max, y_max, rho_res = 1, theta_res = 1):
+def create_rho_theta(x_max, y_max):
     """
     Helper function for Hough Transform
     Creates rho and theta dimension for enchaced Hough accumulator
@@ -228,13 +229,13 @@ def create_rho_theta(x_max, y_max, rho_res = 1, theta_res = 1):
     #fac = np.ceil(max_dist/rho_res) # resolution factor
     #rho = np.arange(-fac * rho_res, fac * rho_res, math.pi/4)
     
-    theta = np.linspace(-90.0, 0.0, math.ceil(90.0/theta_res) + 1)
+    theta = np.linspace(-90.0, 0.0, math.ceil(90.0/THETA_RES) + 1)
     theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
 
     D = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
-    q = math.ceil(D/rho_res)
+    q = math.ceil(D/RHO_RES)
     nrho = 2*q + 1
-    rho = np.linspace(-q*rho_res, q*rho_res, nrho)
+    rho = np.linspace(-q*RHO_RES, q*RHO_RES, nrho)
     return theta, rho
 
 def fill_hs_acc(empty_acc, points, rho, theta):
@@ -288,7 +289,7 @@ def enhance_hs_acc(ht_acc, rho, theta):
     C_enh = h*w*(ht_acc**2)/C_integr
     return C_enh
 
-def hough_transform(points, rho_res):
+def hough_transform(points):
     """
     Parameters
     ----------
@@ -315,14 +316,14 @@ def hough_transform(points, rho_res):
         A theta threshold required for further computation
     """
     x_max, y_max = find_max_points(points)
-    theta, rho = create_rho_theta(x_max, y_max, rho_res)
+    theta, rho = create_rho_theta(x_max, y_max)
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
     theta_T = 3 * 180/(2*(y_max - 1)) # Create a theta threshold
     ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta)
     return theta, rho, ht_acc, ht_acc_enh, theta_T
 
-def find_peaks(ht_acc_enh, rhos, thetas):
+def find_peaks(ht_acc_enh, rhos, thetas, ht_acc_T):
     '''
     
 
@@ -347,7 +348,6 @@ def find_peaks(ht_acc_enh, rhos, thetas):
     #while len(rho_theta) < 4: # Infinity loop?
     #ht_acc_T = np.amax(ht_acc_enh) * frac_t # Create an accumulator threshold
     #ht_acc_T = np.amax(ht_acc_enh)
-    ht_acc_T = np.array(MIN_ACCEPT_HIGHT)
     flat = list(set(np.hstack(ht_acc_enh)))
     flat = np.delete(flat, np.argwhere(flat < ht_acc_T))
     flat_sorted = sorted(flat)
@@ -452,23 +452,23 @@ def gen_extended_peaks(peak_pairs):
         extended_peaks.append(temp_dict)
     return extended_peaks
 
-def vert_dist_is_valid(peak1, peak2, dist_T = 0.5):
+def vert_dist_is_valid(peak1, peak2, min_height):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2) * math.pi / 180.0
-    if (ksi11 - ksi12) < MIN_ACCEPT_HIGHT or (ksi21 - ksi22) < MIN_ACCEPT_HIGHT:
+    if (ksi11 - ksi12) < min_height or (ksi21 - ksi22) < min_height:
         return [False, ang_dif]
     vert_dist_cond1 = (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif)) / abs(ksi11 - ksi12)
     vert_dist_cond2 = (abs(ksi21 - ksi22) - C2 * math.sin(ang_dif)) / abs(ksi21 - ksi22)
-    if max([vert_dist_cond1 , vert_dist_cond2]) < dist_T:
+    if max([vert_dist_cond1 , vert_dist_cond2]) < DIST_T:
         return [True, ang_dif]
     return [False, ang_dif]
 
-def find_valid_peaks_pair(peaks):
+def find_valid_peaks_pair(peaks, min_height):
     for current_peak in peaks[:-1]:
         cur_idx = peaks.index(current_peak)
         for other_peak in peaks[cur_idx + 1:]:
-            if vert_dist_is_valid(current_peak, other_peak, DIST_T)[0]:
+            if vert_dist_is_valid(current_peak, other_peak, min_height)[0]:
                 return [current_peak, other_peak]
 
 def find_intersection(line1, line2):  
@@ -510,13 +510,16 @@ def run_algorithm(figure):
     
     '''
     valid_peaks = None
-    rho_res = 1.0
+    cur_min_accept_height = np.array(START_MIN_ACCEPT_HEIGHT)
     figure = assign_figure(figure)
-    thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, rho_res)
-    rho_theta_pairs= find_peaks(ht_acc, rhos, thetas)
-    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
-    extended_peaks = gen_extended_peaks(cooriented_peaks)
-    valid_peaks = find_valid_peaks_pair(extended_peaks)
+    while valid_peaks == None:
+        thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure)
+        rho_theta_pairs= find_peaks(ht_acc, rhos, thetas,  cur_min_accept_height)
+        cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
+        extended_peaks = gen_extended_peaks(cooriented_peaks)
+        valid_peaks = find_valid_peaks_pair(extended_peaks, cur_min_accept_height)
+        cur_min_accept_height -= 1
+    print (cur_min_accept_height + 1)
     side1 = [valid_peaks[0]["ksi1"], valid_peaks[0]["beta"]]
     side2 = [valid_peaks[0]["ksi2"], valid_peaks[0]["beta"]]
     side3 = [valid_peaks[1]["ksi1"], valid_peaks[1]["beta"]]
