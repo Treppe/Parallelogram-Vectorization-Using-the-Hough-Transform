@@ -450,7 +450,7 @@ def find_valid_peaks_pair(peaks, dist_T = 0.5):
     for current_peak in peaks[:-1]:
         cur_idx = peaks.index(current_peak)
         for other_peak in peaks[cur_idx + 1:]:
-            if vert_dist_is_valid(current_peak, other_peak)[0]:
+            if vert_dist_is_valid(current_peak, other_peak, dist_T)[0]:
                 return [current_peak, other_peak]
 
 def find_intersection(line1, line2):  
@@ -518,9 +518,9 @@ def run_algorithm(figure, rho_res = 1, theta_res = 1, len_T = 0.5, dist_T = 0.5)
 #================================================TEST CASES=======================================================
 
 #Square
-thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm("example 3", dist_T = 0.5)
+thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm("square", dist_T = 0.8)
 
-ring1 = LinearRing(assign_figure("example 3"))
+ring1 = LinearRing(assign_figure("square"))
 x1, y1 = ring1.xy
 ring2 = LinearRing(vertices)
 x2, y2= ring2.xy
