@@ -9,13 +9,13 @@ from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
 # Assign thresholds
-START_MIN_ACCEPT_HEIGHT = 5
-LENGHT_T = 0.5
-DIST_T = 0.5
+START_MIN_ACCEPT_HEIGHT = 7
+LENGHT_T = 0.3
+DIST_T = 0.3
 RHO_RES = 0.3
-THETA_RES = 0.5
+THETA_RES = 0.3
 # Choose figure to run
-FIGURE = "example 3"
+FIGURE = "example 2"
 print ("START_MIN_ACCEPT_HEIGHT: ", START_MIN_ACCEPT_HEIGHT)
 print ("LENGHT_T: ", LENGHT_T)
 print ("DIST_T: ", DIST_T)
@@ -44,7 +44,7 @@ def assign_figure(figure_name):
     square
     '''
     points = None
-    if figure_name == "example 1": # 0.5 0.5 0.3 0.3
+    if figure_name == "example 1": 
         points = np.array([[8.04411, 78.9279], 
                         [8.89507, 79.1510],
                         [9.75144, 79.5972],
@@ -72,7 +72,7 @@ def assign_figure(figure_name):
                         [5.91321, 77.8125],
                         [6.76436, 78.2586], 
                         [8.0422, 78.8164]])
-    elif figure_name == "example 2":
+    elif figure_name == "example 2": # 0.5 0.5 0.3 0.3
         points = np.array([[17.5544, 72.9043],
                          [18.2031, 73.462],
                          [18.6617, 74.466],
@@ -354,14 +354,15 @@ def enhance_hs_acc(ht_acc, rho, theta, ht_acc_T):
     '''
     ht_acc_enh = np.array(ht_acc)
     idxes = np.argwhere(ht_acc_enh >= ht_acc_T)
-    h = 10
-    w = 10
+    h = 5
+    w = 5
     for row_col in idxes:
-        mask_origin = (row_col[0] - h, row_col[1] - w)
+        mask_origin = (row_col[0] - h//2, row_col[1] - w//2)
         integer = np.sum(ht_acc_enh[mask_origin[0] : mask_origin[0] + h, mask_origin[1] : mask_origin[1] + w])
         if integer != 0:
             ht_acc_enh[row_col[0], row_col[1]] = h * w *  ht_acc_enh[row_col[0], row_col[1]] ** 2 / integer
     return ht_acc_enh
+
 def hough_transform(points, ht_acc_T):
     """
     Parameters
