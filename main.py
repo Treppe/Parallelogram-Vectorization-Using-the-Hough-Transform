@@ -9,11 +9,11 @@ from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
 # Assign thresholds
-START_MIN_ACCEPT_HEIGHT = 10
+START_MIN_ACCEPT_HEIGHT = 5
 LENGHT_T = 0.5
 DIST_T = 0.5
 RHO_RES = 0.3
-THETA_RES = 0.3
+THETA_RES = 0.5
 # Choose figure to run
 FIGURE = "example 3"
 print ("START_MIN_ACCEPT_HEIGHT: ", START_MIN_ACCEPT_HEIGHT)
@@ -44,7 +44,7 @@ def assign_figure(figure_name):
     square
     '''
     points = None
-    if figure_name == "example 1":
+    if figure_name == "example 1": # 0.5 0.5 0.3 0.3
         points = np.array([[8.04411, 78.9279], 
                         [8.89507, 79.1510],
                         [9.75144, 79.5972],
@@ -181,6 +181,67 @@ def assign_figure(figure_name):
                            [30,10],
                            [25,10],
                            [20,10]])
+        
+    elif figure_name == "acute":
+            points = np.array([[0.000000, 0.000000],
+                                [6.263796, 5.790209],
+                                [16.504183, 12.045964],
+                                [24.081099, 20.020319],
+                                [41.495261, 32.706964],
+                                [50.777048, 41.809076],
+                                [57.490079, 45.314233],
+                                [64.352872, 50.723552],
+                                [75.10971, 58.023582],
+                                [86.551405, 69.207839],
+                                [94.782589, 76.523081],
+                                [101.366271, 74.227111],
+                                [109.831728, 83.838324],
+                                [131.510132, 105.9979],
+                                [147.695705, 114.980673],
+                                [176.869812, 140.862549],
+                                [182.696924, 147.721467],
+                                [182.696924, 153.721467],
+                                [184.557642, 158.362343],
+                                [189.076471, 162.309518],
+                                [162.309518, 162.309518],
+                                [197.877231, 182.877386],
+                                [200.325566, 191.537966],
+                                [207.2482, 200.086483],
+                                [209.011756, 203.67673],
+                                [214.23023, 217.739714],
+                                [223.023281, 231.106922],
+                                [223.699273, 236.061015],
+                                [225.166413, 240.84092],
+                                [230.963049, 249.049022],
+                                [249.049022, 249.049022],
+                                [243.297775, 273.718474],
+                                [228.064731, 268.527873],
+                                [211.620993, 254.439087],
+                                [200.325566, 249.692029],
+                                [192.365551, 244.944971],
+                                [172.733471, 231.106922],
+                                [156.389932, 214.584216],
+                                [151.82272, 203.67673],
+                                [143.812574, 201.881606],
+                                [138.159218, 192.976421],
+                                [110.819352, 171.123921],
+                                [104.2386, 162.309518],
+                                [92.809975, 152.125433],
+                                [83.719461, 144.292008],
+                                [82.11803, 139.399763],
+                                [66.427963, 132.855926],
+                                [59.58997, 121.543927],
+                                [59.58997, 116.543927],
+                                [58.342477, 114.980673],
+                                [57.290815, 112.171046],
+                                [54.462976, 111.169382],
+                                [54.462976, 104.169382],
+                                [43.699884, 93.721615],
+                                [41.013129, 82.026259],
+                                [37.113555, 71.574606],
+                                [24.906223, 54.236195],
+                                [20.05031, 34.834646],
+                                [6.263796, 18.993811]])
     return points
 
 def find_max_points(points):
@@ -202,6 +263,7 @@ def find_max_points(points):
     
     x_max = np.ceil(np.amax(points[:, 0]))
     y_max = np.ceil(np.amax(points[:, 1]))
+    
     return x_max, y_max
 
 def create_rho_theta(x_max, y_max):
@@ -215,8 +277,6 @@ def create_rho_theta(x_max, y_max):
         The highest value by x axis
     y_max : float
         The highest value by y axis
-    rho_res : float
-        Rho resolution. Determines discretisation step for rho
 
     Returns
     -------
@@ -226,22 +286,17 @@ def create_rho_theta(x_max, y_max):
         Empty array representing rho dimension
 
     """
-   
-    # Making theta dimension
-    #d_theta= 180/(2*(y_max - 1))
-    #theta = np.arange(-90, 90, d_theta)
-    # Making rho dimension:
-    #max_dist = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
-    #fac = np.ceil(max_dist/rho_res) # resolution factor
-    #rho = np.arange(-fac * rho_res, fac * rho_res, math.pi/4)
-    
+    # Create theta dimension 
     theta = np.linspace(-90.0, 0.0, math.ceil(90.0/THETA_RES) + 1)
     theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
-
+    
+    # Create rho dimension
+    # Max rho length is the distance to the farrest possible x_y point
     D = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
     q = math.ceil(D/RHO_RES)
     nrho = 2*q + 1
-    rho = np.linspace(-q*RHO_RES, q*RHO_RES, nrho)
+    rho = np.linspace(-D, D, nrho)
+    
     return theta, rho
 
 def fill_hs_acc(empty_acc, points, rho, theta):
@@ -272,7 +327,7 @@ def fill_hs_acc(empty_acc, points, rho, theta):
             empty_acc[rhoIdx, thIdx] += 1
     return empty_acc            
 
-def enhance_hs_acc(ht_acc, rho, theta, ht_acc_T, d_theta):
+def enhance_hs_acc(ht_acc, rho, theta, ht_acc_T):
     """
 
     Parameters
@@ -299,8 +354,8 @@ def enhance_hs_acc(ht_acc, rho, theta, ht_acc_T, d_theta):
     '''
     ht_acc_enh = np.array(ht_acc)
     idxes = np.argwhere(ht_acc_enh >= ht_acc_T)
-    h = 5
-    w = 5
+    h = 10
+    w = 10
     for row_col in idxes:
         mask_origin = (row_col[0] - h, row_col[1] - w)
         integer = np.sum(ht_acc_enh[mask_origin[0] : mask_origin[0] + h, mask_origin[1] : mask_origin[1] + w])
@@ -338,8 +393,8 @@ def hough_transform(points, ht_acc_T):
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
     theta_T = THETA_RES * 3  # Create a theta threshold
-    #ht_acc_enh = None
-    return theta, rho, ht_acc, theta_T
+    ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta, ht_acc_T)
+    return theta, rho, ht_acc, ht_acc_enh, theta_T
 
 def find_peaks(ht_acc_enh, rhos, thetas, ht_acc_T):
     '''
@@ -530,16 +585,18 @@ def run_algorithm(figure):
     valid_peaks = None
     cur_min_accept_height = np.array(START_MIN_ACCEPT_HEIGHT)
     figure = assign_figure(figure)
-    while valid_peaks == None and cur_min_accept_height  != np.array(2):
-        print ("Hi!")
-        print (cur_min_accept_height)
-        thetas, rhos, ht_acc, theta_T = hough_transform(figure, cur_min_accept_height)
-        rho_theta_pairs= find_peaks(ht_acc, rhos, thetas,  cur_min_accept_height)
-        cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
-        extended_peaks = gen_extended_peaks(cooriented_peaks)
-        valid_peaks = find_valid_peaks_pair(extended_peaks, cur_min_accept_height)
-        cur_min_accept_height -= 1
-    print (cur_min_accept_height + 1)
+    
+    #while valid_peaks == None and cur_min_accept_height  != np.array(3):
+    print ("Hi!")
+    print (cur_min_accept_height)
+    thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, cur_min_accept_height)
+    rho_theta_pairs= find_peaks(ht_acc, rhos, thetas,  cur_min_accept_height)
+    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
+    extended_peaks = gen_extended_peaks(cooriented_peaks)
+    valid_peaks = find_valid_peaks_pair(extended_peaks, cur_min_accept_height)
+        
+    #print (cur_min_accept_height + 1)
+
     side1 = [valid_peaks[0]["ksi1"], valid_peaks[0]["beta"]]
     side2 = [valid_peaks[0]["ksi2"], valid_peaks[0]["beta"]]
     side3 = [valid_peaks[1]["ksi1"], valid_peaks[1]["beta"]]
@@ -549,15 +606,18 @@ def run_algorithm(figure):
     x3_y3 = find_intersection(side2, side3)
     x4_y4 = find_intersection(side2, side4)
     vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
-    return thetas, rhos, ht_acc, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices
+
+    return thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices
 
 
 #================================================TEST CASES=======================================================
-#Square
-thetas, rhos, ht_acc, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm(FIGURE)
+thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm(FIGURE)
+
+
 
 ring1 = LinearRing(assign_figure(FIGURE))
 x1, y1 = ring1.xy
+
 ring2 = LinearRing(vertices)
 x2, y2= ring2.xy
 
