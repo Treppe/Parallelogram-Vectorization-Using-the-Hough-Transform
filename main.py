@@ -9,14 +9,14 @@ from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
 # Assign thresholds
-START_MIN_ACCEPT_HEIGHT = 7
+MIN_ACCEPT_HEIGHT = np.array(7)
 LENGHT_T = 0.3
 DIST_T = 0.3
 RHO_RES = 0.3
 THETA_RES = 0.3
 # Choose figure to run
 FIGURE = "example 2"
-print ("START_MIN_ACCEPT_HEIGHT: ", START_MIN_ACCEPT_HEIGHT)
+print ("START_MIN_ACCEPT_HEIGHT: ", MIN_ACCEPT_HEIGHT)
 print ("LENGHT_T: ", LENGHT_T)
 print ("DIST_T: ", DIST_T)
 print ("RHO_RES: ", RHO_RES)
@@ -246,7 +246,7 @@ def assign_figure(figure_name):
 
 def find_max_points(points):
     """
-
+    Find the highest value in each column of vector
     Parameters
     ----------
     point : np.array
@@ -291,22 +291,22 @@ def create_rho_theta(x_max, y_max):
     theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
     
     # Create rho dimension
-    # Max rho length is the distance to the farrest possible x_y point
-    D = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
-    q = math.ceil(D/RHO_RES)
-    nrho = 2*q + 1
-    rho = np.linspace(-D, D, nrho)
+    # Max rho length is the distance to the farrest possible (x,y) point 
+    # in given points array
+    distance = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
+    nrho = 2*math.ceil(distance/RHO_RES) + 1 # Num of rho steps between min and max rho
+    rho = np.linspace(-distance, distance, nrho)
     
     return theta, rho
 
-def fill_hs_acc(empty_acc, points, rho, theta):
+def fill_hs_acc(ht_acc, points, rho, theta):
     """
-    Compute voices for every (rho, theta) pair in Hough Accumulator, and update it values
+    Compute voices for every (rho, theta) pair in Hough Accumulator and update it values
 
     Parameters
     ----------
     empty_acc : np.array
-        Empty array [rho x theta]
+        Empty Hough accumulator
     points : np.array
         2D array of points to transform
     rho : float
@@ -316,7 +316,8 @@ def fill_hs_acc(empty_acc, points, rho, theta):
 
     Returns
     -------
-    None.
+    ht_acc : np.array
+        Filled Hough accumulator
 
     """
     for x, y in points:
@@ -324,10 +325,10 @@ def fill_hs_acc(empty_acc, points, rho, theta):
             rhoVal = x*math.cos(theta[thIdx]*math.pi/180.0) + \
                     y*math.sin(theta[thIdx]*math.pi/180.0)
             rhoIdx = np.nonzero(np.abs(rho-rhoVal) == np.min(np.abs(rho-rhoVal)))[0]
-            empty_acc[rhoIdx, thIdx] += 1
-    return empty_acc            
+            ht_acc[rhoIdx, thIdx] += 1
+    return ht_acc           
 
-def enhance_hs_acc(ht_acc, rho, theta, ht_acc_T):
+def enhance_hs_acc(ht_acc, rho, theta):
     """
 
     Parameters
@@ -341,19 +342,12 @@ def enhance_hs_acc(ht_acc, rho, theta, ht_acc_T):
 
     Returns
     -------
-    C_enh : np.array
-        Enhansed version of C used to extract highest peaks more easily
-
+    ht_acc_enh : np.array
+        Enhansed version of ht_acc used to extract highest peaks more easily
     """
-    '''
-    if empty_acc[rhoIdx, thIdx] == 0:
-                empty_acc[rhoIdx, thIdx] += 1
-            else:
-                empty_acc[rhoIdx, thIdx] += 1 + 0.1 * empty_acc[rhoIdx, thIdx]
-    return C_enh
-    '''
+    
     ht_acc_enh = np.array(ht_acc)
-    idxes = np.argwhere(ht_acc_enh >= ht_acc_T)
+    idxes = np.argwhere(ht_acc_enh >= MIN_ACCEPT_HEIGHT)
     h = 5
     w = 5
     for row_col in idxes:
@@ -363,7 +357,7 @@ def enhance_hs_acc(ht_acc, rho, theta, ht_acc_T):
             ht_acc_enh[row_col[0], row_col[1]] = h * w *  ht_acc_enh[row_col[0], row_col[1]] ** 2 / integer
     return ht_acc_enh
 
-def hough_transform(points, ht_acc_T):
+def hough_transform(points):
     """
     Parameters
     ----------
@@ -394,7 +388,7 @@ def hough_transform(points, ht_acc_T):
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
     theta_T = THETA_RES * 3  # Create a theta threshold
-    ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta, ht_acc_T)
+    ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta)
     return theta, rho, ht_acc, ht_acc_enh, theta_T
 
 def find_peaks(ht_acc_enh, rhos, thetas, ht_acc_T):
@@ -584,17 +578,14 @@ def run_algorithm(figure):
     
     '''
     valid_peaks = None
-    cur_min_accept_height = np.array(START_MIN_ACCEPT_HEIGHT)
     figure = assign_figure(figure)
     
     #while valid_peaks == None and cur_min_accept_height  != np.array(3):
-    print ("Hi!")
-    print (cur_min_accept_height)
-    thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure, cur_min_accept_height)
-    rho_theta_pairs= find_peaks(ht_acc, rhos, thetas,  cur_min_accept_height)
+    thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure)
+    rho_theta_pairs= find_peaks(ht_acc, rhos, thetas,  MIN_ACCEPT_HEIGHT)
     cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
     extended_peaks = gen_extended_peaks(cooriented_peaks)
-    valid_peaks = find_valid_peaks_pair(extended_peaks, cur_min_accept_height)
+    valid_peaks = find_valid_peaks_pair(extended_peaks, MIN_ACCEPT_HEIGHT)
         
     #print (cur_min_accept_height + 1)
 
