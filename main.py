@@ -14,6 +14,7 @@ LENGHT_T = 0.3
 DIST_T = 0.3
 RHO_RES = 0.3
 THETA_RES = 0.3
+THETA_T = THETA_RES * 3
 # Choose figure to run
 FIGURE = "example 2"
 print ("START_MIN_ACCEPT_HEIGHT: ", MIN_ACCEPT_HEIGHT)
@@ -359,6 +360,8 @@ def enhance_hs_acc(ht_acc, rho, theta):
 
 def hough_transform(points):
     """
+    Builds a Hough H(theta, rho) space for given arrai of (x,y) coordinates
+    
     Parameters
     ----------
     points : np.array
@@ -387,9 +390,8 @@ def hough_transform(points):
     theta, rho = create_rho_theta(x_max, y_max)
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
-    theta_T = THETA_RES * 3  # Create a theta threshold
     ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta)
-    return theta, rho, ht_acc, ht_acc_enh, theta_T
+    return theta, rho, ht_acc, ht_acc_enh
 
 def find_peaks(ht_acc_enh, rhos, thetas, ht_acc_T):
     '''
@@ -441,7 +443,7 @@ def peaks_to_dict(peak_pairs):
         peaks_dict_list.append(temp_dict)
     return peaks_dict_list
 
-def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, theta_T):
+def get_cooriented_pairs(ht_acc, peaks, rhos, thetas):
     """
 
     Parameters
@@ -477,7 +479,7 @@ def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, theta_T):
             acc_idx2 = [np.where(rhos == rho2), np.where(thetas == theta2)]
             acc_value1 = ht_acc[acc_idx1[0], acc_idx1[1]]
             acc_value2 = ht_acc[acc_idx2[0], acc_idx2[1]]
-            is_parallel = abs(theta1 - theta2) < theta_T
+            is_parallel = abs(theta1 - theta2) < THETA_T
             is_apropriate_lenght = abs(acc_value1- acc_value2) < LENGHT_T * (acc_value1 + acc_value2) * 0.5
             if is_parallel and is_apropriate_lenght:
                 cooriented_pairs.append([current_peak, float(acc_value1), compare_peak, float(acc_value2)])
@@ -581,9 +583,9 @@ def run_algorithm(figure):
     figure = assign_figure(figure)
     
     #while valid_peaks == None and cur_min_accept_height  != np.array(3):
-    thetas, rhos, ht_acc, ht_acc_enh, theta_T = hough_transform(figure)
+    thetas, rhos, ht_acc, ht_acc_enh = hough_transform(figure)
     rho_theta_pairs= find_peaks(ht_acc, rhos, thetas,  MIN_ACCEPT_HEIGHT)
-    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, theta_T)
+    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas)
     extended_peaks = gen_extended_peaks(cooriented_peaks)
     valid_peaks = find_valid_peaks_pair(extended_peaks, MIN_ACCEPT_HEIGHT)
         
