@@ -8,19 +8,20 @@ import math
 from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
+
 # Assign rho and theta discretive step (accumulator's resolution)
 
 # Assign parallelogram detecting thresholds
-MIN_ACCEPT_HEIGHT = np.array(7)
-LENGHT_T = 0.3
-DIST_T = 0.3
+MIN_ACCEPT_HEIGHT = np.array(2)
+LENGHT_T = 0.5
+DIST_T = 0.5
 
 # Accumulator enhansing constants
-ENH_AREA_HEIGHT = 5
-ENH_AREA_WIDTH = 5
+ENH_AREA_HEIGHT = 134
+ENH_AREA_WIDTH = 175
 ENH_MIN_ACCEPT_HEIGHT = np.array(ENH_AREA_HEIGHT * ENH_AREA_WIDTH)
 # Choose figure to run
-FIGURE = "example 3"
+FIGURE = "example 1"
 print ("START_MIN_ACCEPT_HEIGHT: ", MIN_ACCEPT_HEIGHT)
 print ("LENGHT_T: ", LENGHT_T)
 print ("DIST_T: ", DIST_T)
@@ -331,6 +332,7 @@ def fill_hs_acc(ht_acc, points, rho, theta):
             ht_acc[rhoIdx, thIdx] += 1
     return ht_acc           
 
+
 def enhance_hs_acc(ht_acc, rho, theta):
     """
 
@@ -348,14 +350,15 @@ def enhance_hs_acc(ht_acc, rho, theta):
     ht_acc_enh : np.array
         Enhansed version of ht_acc used to extract highest peaks more easily
     """
-    
+    h = len(rho) - 1
+    w = len(theta) - 1
     ht_acc_enh = np.array(ht_acc)
     idxes = np.argwhere(ht_acc_enh >= MIN_ACCEPT_HEIGHT)
     for row_col in idxes:
-        mask_origin = (row_col[0] - ENH_AREA_HEIGHT//2, row_col[1] - ENH_AREA_WIDTH//2)
-        integer = np.sum(ht_acc_enh[mask_origin[0] : mask_origin[0] + ENH_AREA_HEIGHT, mask_origin[1] : mask_origin[1] + ENH_AREA_WIDTH])
+        mask_origin = ((row_col[0] - h) % h, (row_col[1] - w) % w)
+        integer = np.sum(ht_acc_enh[mask_origin[0] : mask_origin[0] + h, mask_origin[1] : mask_origin[1] + w])
         if integer != 0:
-            ht_acc_enh[row_col[0], row_col[1]] = ENH_AREA_HEIGHT * ENH_AREA_WIDTH *  ht_acc_enh[row_col[0], row_col[1]] ** 2 / integer
+            ht_acc_enh[row_col[0], row_col[1]] = h * w *  ht_acc_enh[row_col[0], row_col[1]] ** 2 / integer
     return ht_acc_enh
 
 def hough_transform(points):
@@ -393,6 +396,30 @@ def hough_transform(points):
     ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta)
     return theta, rho, d_theta, ht_acc, ht_acc_enh
 
+def top_n_rho_theta_pairs(ht_acc_matrix, n, rhos, thetas):
+  '''
+  @param hough transform accumulator matrix H (rho by theta)
+  @param n pairs of rho and thetas desired
+  @param ordered array of rhos represented by rows in H
+  @param ordered array of thetas represented by columns in H
+  @return top n rho theta pairs in H by accumulator value
+  @return x,y indexes in H of top n rho theta pairs
+  '''
+  flat = list(set(np.hstack(ht_acc_matrix)))
+  flat_sorted = sorted(flat, key = lambda n: -n)
+  coords_sorted = [(np.argwhere(ht_acc_matrix == acc_value)) for acc_value in flat_sorted[0:n]]
+  rho_theta = []
+  x_y = []
+  for coords_for_val_idx in range(0, len(coords_sorted), 1):
+    coords_for_val = coords_sorted[coords_for_val_idx]
+    for i in range(0, len(coords_for_val), 1):
+      k,m = coords_for_val[i] # n by m matrix
+      rho = rhos[k]
+      theta = thetas[m]
+      rho_theta.append([rho, theta])
+      x_y.append([k, n]) # just to unnest and reorder coords_sorted
+  return rho_theta[0:n]
+
 def find_peaks(ht_acc_enh, rhos, thetas):
     '''
     
@@ -414,7 +441,6 @@ def find_peaks(ht_acc_enh, rhos, thetas):
         '''
     rho_theta = []
     flat = list(set(np.hstack(ht_acc_enh)))
-    print (ENH_MIN_ACCEPT_HEIGHT)
     flat = np.delete(flat, np.argwhere(flat < MIN_ACCEPT_HEIGHT))
     flat_sorted = sorted(flat)
     coords_sorted = [(np.argwhere(ht_acc_enh == acc_value)) for acc_value in flat_sorted]
@@ -480,14 +506,6 @@ def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, d_theta):
             if is_parallel and is_apropriate_lenght:
                 cooriented_pairs.append([current_peak, float(acc_value1), compare_peak, float(acc_value2)])
     return peaks_to_dict(cooriented_pairs)
-
-def find_x_y(rho1, theta1, rho2, theta2):
-    theta1 = theta1 
-    theta2 = theta2
-    a_matrix = np.array([[math.cos(theta1), math.sin(theta1)], [math.cos(theta2), math.sin(theta2)]])
-    b_matrix = np.array([rho1, rho2])
-    x_y = np.linalg.solve(a_matrix, b_matrix)
-    return x_y
 
 def gen_extended_peaks(peak_pairs):
     """
@@ -581,6 +599,7 @@ def run_algorithm(figure):
     #while valid_peaks == None and cur_min_accept_height  != np.array(3):
     thetas, rhos, d_theta, ht_acc, ht_acc_enh = hough_transform(figure)
     rho_theta_pairs= find_peaks(ht_acc, rhos, thetas)
+    #rho_theta_pairs = top_n_rho_theta_pairs(ht_acc, 10, rhos, thetas)
     cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, d_theta)
     extended_peaks = gen_extended_peaks(cooriented_peaks)
     valid_peaks, ang_dif = find_valid_peaks_pair(extended_peaks)
