@@ -9,26 +9,21 @@ from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
 # Assign rho and theta discretive step (accumulator's resolution)
-RHO_RES = 0.3
-THETA_RES = 0.3
 
 # Assign parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(7)
 LENGHT_T = 0.3
 DIST_T = 0.3
-THETA_T = THETA_RES * 3
 
 # Accumulator enhansing constants
 ENH_AREA_HEIGHT = 5
 ENH_AREA_WIDTH = 5
-ENH_MIN_ACCEPT_HEIGHT = ENH_AREA_HEIGHT * ENH_AREA_WIDTH * MIN_ACCEPT_HEIGHT
+ENH_MIN_ACCEPT_HEIGHT = np.array(ENH_AREA_HEIGHT * ENH_AREA_WIDTH)
 # Choose figure to run
-FIGURE = "example 2"
+FIGURE = "example 3"
 print ("START_MIN_ACCEPT_HEIGHT: ", MIN_ACCEPT_HEIGHT)
 print ("LENGHT_T: ", LENGHT_T)
 print ("DIST_T: ", DIST_T)
-print ("RHO_RES: ", RHO_RES)
-print ("THETA_RES: ", THETA_RES)
 print ("FIGURE: ", FIGURE)
 
 def assign_figure(figure_name):
@@ -294,18 +289,18 @@ def create_rho_theta(x_max, y_max):
         Empty array representing rho dimension
 
     """
-    # Create theta dimension 
-    theta = np.linspace(-90.0, 0.0, math.ceil(90.0/THETA_RES) + 1)
-    theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
-    
+    # Create theta dimension
+    n_max = max(x_max, y_max)
+    d_theta = math.pi / (2*(n_max - 1))
+    theta = np.arange(-math.pi/2, math.pi/2, d_theta)
     # Create rho dimension
     # Max rho length is the distance to the farrest possible (x,y) point 
     # in given points array
     distance = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
-    nrho = 2*math.ceil(distance/RHO_RES) + 1 # Num of rho steps between min and max rho
-    rho = np.linspace(-distance, distance, nrho)
+    d_rho = math.pi/4 # Num of rho steps between min and max rho
+    rho = np.arange(-distance, distance, d_rho)
     
-    return theta, rho
+    return theta, rho, d_theta
 
 def fill_hs_acc(ht_acc, points, rho, theta):
     """
@@ -330,8 +325,8 @@ def fill_hs_acc(ht_acc, points, rho, theta):
     """
     for x, y in points:
         for thIdx in range(len(theta)):
-            rhoVal = x*math.cos(theta[thIdx]*math.pi/180.0) + \
-                    y*math.sin(theta[thIdx]*math.pi/180.0)
+            rhoVal = x*math.cos(theta[thIdx]) + \
+                    y*math.sin(theta[thIdx])
             rhoIdx = np.nonzero(np.abs(rho-rhoVal) == np.min(np.abs(rho-rhoVal)))[0]
             ht_acc[rhoIdx, thIdx] += 1
     return ht_acc           
@@ -392,11 +387,11 @@ def hough_transform(points):
         A theta threshold required for further computation
     """
     x_max, y_max = find_max_points(points)
-    theta, rho = create_rho_theta(x_max, y_max)
+    theta, rho, d_theta = create_rho_theta(x_max, y_max)
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
     ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta)
-    return theta, rho, ht_acc, ht_acc_enh
+    return theta, rho, d_theta, ht_acc, ht_acc_enh
 
 def find_peaks(ht_acc_enh, rhos, thetas):
     '''
@@ -419,6 +414,7 @@ def find_peaks(ht_acc_enh, rhos, thetas):
         '''
     rho_theta = []
     flat = list(set(np.hstack(ht_acc_enh)))
+    print (ENH_MIN_ACCEPT_HEIGHT)
     flat = np.delete(flat, np.argwhere(flat < MIN_ACCEPT_HEIGHT))
     flat_sorted = sorted(flat)
     coords_sorted = [(np.argwhere(ht_acc_enh == acc_value)) for acc_value in flat_sorted]
@@ -442,7 +438,7 @@ def peaks_to_dict(peak_pairs):
         peaks_dict_list.append(temp_dict)
     return peaks_dict_list
 
-def get_cooriented_pairs(ht_acc, peaks, rhos, thetas):
+def get_cooriented_pairs(ht_acc, peaks, rhos, thetas, d_theta):
     """
 
     Parameters
@@ -468,6 +464,7 @@ def get_cooriented_pairs(ht_acc, peaks, rhos, thetas):
         Pairs of peaks occuring at the same orientation theta, and with similar heights.
 
     """
+    theta_t = d_theta * 3
     cooriented_pairs = []
     for current_peak in peaks[:-1]:
         cur_idx = peaks.index(current_peak)
@@ -478,15 +475,15 @@ def get_cooriented_pairs(ht_acc, peaks, rhos, thetas):
             acc_idx2 = [np.where(rhos == rho2), np.where(thetas == theta2)]
             acc_value1 = ht_acc[acc_idx1[0], acc_idx1[1]]
             acc_value2 = ht_acc[acc_idx2[0], acc_idx2[1]]
-            is_parallel = abs(theta1 - theta2) < THETA_T
+            is_parallel = abs(theta1 - theta2) < theta_t
             is_apropriate_lenght = abs(acc_value1- acc_value2) < LENGHT_T * (acc_value1 + acc_value2) * 0.5
             if is_parallel and is_apropriate_lenght:
                 cooriented_pairs.append([current_peak, float(acc_value1), compare_peak, float(acc_value2)])
     return peaks_to_dict(cooriented_pairs)
 
 def find_x_y(rho1, theta1, rho2, theta2):
-    theta1 = theta1 * math.pi / 180
-    theta2 = theta2 * math.pi / 180
+    theta1 = theta1 
+    theta2 = theta2
     a_matrix = np.array([[math.cos(theta1), math.sin(theta1)], [math.cos(theta2), math.sin(theta2)]])
     b_matrix = np.array([rho1, rho2])
     x_y = np.linalg.solve(a_matrix, b_matrix)
@@ -523,7 +520,7 @@ def gen_extended_peaks(peak_pairs):
 def vert_dist_is_valid(peak1, peak2):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
-    ang_dif = abs(beta1 - beta2) * math.pi / 180.0
+    ang_dif = abs(beta1 - beta2)
     if (ksi11 - ksi12) < MIN_ACCEPT_HEIGHT or (ksi21 - ksi22) < MIN_ACCEPT_HEIGHT:
         return [False, ang_dif]
     vert_dist_cond1 = (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif)) / abs(ksi11 - ksi12)
@@ -538,13 +535,14 @@ def find_valid_peaks_pair(peaks):
         for other_peak in peaks[cur_idx + 1:]:
             condition, ang_dif = vert_dist_is_valid(current_peak, other_peak)
             if condition:
-                return [current_peak, other_peak], ang_dif
+                output = [current_peak, other_peak]
+                return output, ang_dif
 
 def find_intersection(line1, line2):  
     rho1, theta1 = line1
     rho2, theta2 = line2
-    theta1 = theta1 * math.pi / 180.0
-    theta2 = theta2 * math.pi / 180.0
+    theta1 = theta1
+    theta2 = theta2
     a_matrix = np.array([[math.cos(theta1), math.sin(theta1)], [math.cos(theta2), math.sin(theta2)]])
     b_matrix = np.array([rho1, rho2])
     x_y = np.linalg.solve(a_matrix, b_matrix)
@@ -578,13 +576,12 @@ def run_algorithm(figure):
         DESCRIPTION. x and y coordinates corresponding to sinusoids in Hough Space
     
     '''
-    valid_peaks = None
     figure = assign_figure(figure)
     
     #while valid_peaks == None and cur_min_accept_height  != np.array(3):
-    thetas, rhos, ht_acc, ht_acc_enh = hough_transform(figure)
+    thetas, rhos, d_theta, ht_acc, ht_acc_enh = hough_transform(figure)
     rho_theta_pairs= find_peaks(ht_acc, rhos, thetas)
-    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas)
+    cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, d_theta)
     extended_peaks = gen_extended_peaks(cooriented_peaks)
     valid_peaks, ang_dif = find_valid_peaks_pair(extended_peaks)
 
