@@ -393,7 +393,7 @@ def hough_transform(points):
     ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta)
     return theta, rho, ht_acc, ht_acc_enh
 
-def find_peaks(ht_acc_enh, rhos, thetas, ht_acc_T):
+def find_peaks(ht_acc_enh, rhos, thetas):
     '''
     
 
@@ -401,8 +401,7 @@ def find_peaks(ht_acc_enh, rhos, thetas, ht_acc_T):
     ----------
     ht_acc : np.array
         Hough transform accumulator matrix C (rho by theta)
-    n : int
-        n pairs of rho and thetas desired
+
     rhos : list
         Ordered array of rhos represented by rows in C
     thetas : list
@@ -414,12 +413,8 @@ def find_peaks(ht_acc_enh, rhos, thetas, ht_acc_T):
         Top n rho theta pairs in H by accumulator value
         '''
     rho_theta = []
-    #frac_t = 1
-    #while len(rho_theta) < 4: # Infinity loop?
-    #ht_acc_T = np.amax(ht_acc_enh) * frac_t # Create an accumulator threshold
-    #ht_acc_T = np.amax(ht_acc_enh)
     flat = list(set(np.hstack(ht_acc_enh)))
-    flat = np.delete(flat, np.argwhere(flat < ht_acc_T))
+    flat = np.delete(flat, np.argwhere(flat < MIN_ACCEPT_HEIGHT))
     flat_sorted = sorted(flat)
     coords_sorted = [(np.argwhere(ht_acc_enh == acc_value)) for acc_value in flat_sorted]
     rho_theta = []
@@ -430,7 +425,6 @@ def find_peaks(ht_acc_enh, rhos, thetas, ht_acc_T):
         rho = rhos[k]
         theta = thetas[m]
         rho_theta.append([rho, theta])
-    #frac_t = frac_t*0.9 
     return rho_theta
 
 def peaks_to_dict(peak_pairs):
@@ -522,11 +516,11 @@ def gen_extended_peaks(peak_pairs):
         extended_peaks.append(temp_dict)
     return extended_peaks
 
-def vert_dist_is_valid(peak1, peak2, min_height):
+def vert_dist_is_valid(peak1, peak2):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2) * math.pi / 180.0
-    if (ksi11 - ksi12) < min_height or (ksi21 - ksi22) < min_height:
+    if (ksi11 - ksi12) < MIN_ACCEPT_HEIGHT or (ksi21 - ksi22) < MIN_ACCEPT_HEIGHT:
         return [False, ang_dif]
     vert_dist_cond1 = (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif)) / abs(ksi11 - ksi12)
     vert_dist_cond2 = (abs(ksi21 - ksi22) - C2 * math.sin(ang_dif)) / abs(ksi21 - ksi22)
@@ -534,12 +528,13 @@ def vert_dist_is_valid(peak1, peak2, min_height):
         return [True, ang_dif]
     return [False, ang_dif]
 
-def find_valid_peaks_pair(peaks, min_height):
+def find_valid_peaks_pair(peaks):
     for current_peak in peaks[:-1]:
         cur_idx = peaks.index(current_peak)
         for other_peak in peaks[cur_idx + 1:]:
-            if vert_dist_is_valid(current_peak, other_peak, min_height)[0]:
-                return [current_peak, other_peak]
+            condition, ang_dif = vert_dist_is_valid(current_peak, other_peak)
+            if condition:
+                return [current_peak, other_peak], ang_dif
 
 def find_intersection(line1, line2):  
     rho1, theta1 = line1
@@ -584,10 +579,10 @@ def run_algorithm(figure):
     
     #while valid_peaks == None and cur_min_accept_height  != np.array(3):
     thetas, rhos, ht_acc, ht_acc_enh = hough_transform(figure)
-    rho_theta_pairs= find_peaks(ht_acc, rhos, thetas,  MIN_ACCEPT_HEIGHT)
+    rho_theta_pairs= find_peaks(ht_acc, rhos, thetas)
     cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas)
     extended_peaks = gen_extended_peaks(cooriented_peaks)
-    valid_peaks = find_valid_peaks_pair(extended_peaks, MIN_ACCEPT_HEIGHT)
+    valid_peaks, ang_dif = find_valid_peaks_pair(extended_peaks)
         
     #print (cur_min_accept_height + 1)
 
