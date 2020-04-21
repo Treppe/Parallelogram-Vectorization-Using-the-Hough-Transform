@@ -8,13 +8,20 @@ import math
 from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
-# Assign thresholds
+# Assign rho and theta discretive step (accumulator's resolution)
+RHO_RES = 0.3
+THETA_RES = 0.3
+
+# Assign parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(7)
 LENGHT_T = 0.3
 DIST_T = 0.3
-RHO_RES = 0.3
-THETA_RES = 0.3
 THETA_T = THETA_RES * 3
+
+# Accumulator enhansing constants
+ENH_AREA_HEIGHT = 5
+ENH_AREA_WIDTH = 5
+ENH_MIN_ACCEPT_HEIGHT = ENH_AREA_HEIGHT * ENH_AREA_WIDTH * MIN_ACCEPT_HEIGHT
 # Choose figure to run
 FIGURE = "example 2"
 print ("START_MIN_ACCEPT_HEIGHT: ", MIN_ACCEPT_HEIGHT)
@@ -349,13 +356,11 @@ def enhance_hs_acc(ht_acc, rho, theta):
     
     ht_acc_enh = np.array(ht_acc)
     idxes = np.argwhere(ht_acc_enh >= MIN_ACCEPT_HEIGHT)
-    h = 5
-    w = 5
     for row_col in idxes:
-        mask_origin = (row_col[0] - h//2, row_col[1] - w//2)
-        integer = np.sum(ht_acc_enh[mask_origin[0] : mask_origin[0] + h, mask_origin[1] : mask_origin[1] + w])
+        mask_origin = (row_col[0] - ENH_AREA_HEIGHT//2, row_col[1] - ENH_AREA_WIDTH//2)
+        integer = np.sum(ht_acc_enh[mask_origin[0] : mask_origin[0] + ENH_AREA_HEIGHT, mask_origin[1] : mask_origin[1] + ENH_AREA_WIDTH])
         if integer != 0:
-            ht_acc_enh[row_col[0], row_col[1]] = h * w *  ht_acc_enh[row_col[0], row_col[1]] ** 2 / integer
+            ht_acc_enh[row_col[0], row_col[1]] = ENH_AREA_HEIGHT * ENH_AREA_WIDTH *  ht_acc_enh[row_col[0], row_col[1]] ** 2 / integer
     return ht_acc_enh
 
 def hough_transform(points):
@@ -409,8 +414,8 @@ def find_peaks(ht_acc_enh, rhos, thetas):
 
     Returns
     -------
-    list
-        Top n rho theta pairs in H by accumulator value
+    rho_theta : list
+        List of rho and theta parameters for lines which got at least MIN_ACCEPT_HEIGHT voices
         '''
     rho_theta = []
     flat = list(set(np.hstack(ht_acc_enh)))
@@ -494,8 +499,7 @@ def gen_extended_peaks(peak_pairs):
     Parameters
     ----------
     pairs : list
-        List of chosen pairs of peaks from Hough Accumulator and their parameters.
-        List must be given in form: [[rho1, theta1], acc_value1, [rho2, theta2], acc_value2]
+        Dict of chosen pairs of peaks from Hough Accumulator and their parameters.
 
     Returns
     -------
@@ -583,8 +587,6 @@ def run_algorithm(figure):
     cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas)
     extended_peaks = gen_extended_peaks(cooriented_peaks)
     valid_peaks, ang_dif = find_valid_peaks_pair(extended_peaks)
-        
-    #print (cur_min_accept_height + 1)
 
     side1 = [valid_peaks[0]["ksi1"], valid_peaks[0]["beta"]]
     side2 = [valid_peaks[0]["ksi2"], valid_peaks[0]["beta"]]
