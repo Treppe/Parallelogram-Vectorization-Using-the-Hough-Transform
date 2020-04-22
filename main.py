@@ -12,16 +12,18 @@ from shapely.geometry.polygon import LinearRing
 # Assign rho and theta discretive step (accumulator's resolution)
 
 # Assign parallelogram detecting thresholds
-MIN_ACCEPT_HEIGHT = np.array(2)
-LENGHT_T = 0.5
-DIST_T = 0.5
+MIN_ACCEPT_HEIGHT = np.array(8)
+LENGHT_T = 0.3
+DIST_T = 0.3
+APROX_WIDTH = 1
+PERIMETER_T = 0.1
 
 # Accumulator enhansing constants
 ENH_AREA_HEIGHT = 134
 ENH_AREA_WIDTH = 175
 ENH_MIN_ACCEPT_HEIGHT = np.array(ENH_AREA_HEIGHT * ENH_AREA_WIDTH)
 # Choose figure to run
-FIGURE = "example 1"
+FIGURE = "example 2"
 print ("START_MIN_ACCEPT_HEIGHT: ", MIN_ACCEPT_HEIGHT)
 print ("LENGHT_T: ", LENGHT_T)
 print ("DIST_T: ", DIST_T)
@@ -76,6 +78,7 @@ def assign_figure(figure_name):
                         [5.91321, 77.8125],
                         [6.76436, 78.2586], 
                         [8.0422, 78.8164]])
+   
     elif figure_name == "example 2": # 0.5 0.5 0.3 0.3
         points = np.array([[17.5544, 72.9043],
                          [18.2031, 73.462],
@@ -163,12 +166,14 @@ def assign_figure(figure_name):
                          [7.37899, 63.9804],
                          [8.20689, 64.4266],
                          [9.0364, 64.8728]])
+   
     elif figure_name == "line":
         points = np.array([[1,1],
                  [2,2],
                  [3,3],
                  [4,4]])
         points = points * 10
+    
     elif figure_name == "square": 
         points = np.array([[10,10],
                            [10,15],
@@ -330,6 +335,7 @@ def fill_hs_acc(ht_acc, points, rho, theta):
                     y*math.sin(theta[thIdx])
             rhoIdx = np.nonzero(np.abs(rho-rhoVal) == np.min(np.abs(rho-rhoVal)))[0]
             ht_acc[rhoIdx, thIdx] += 1
+    ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
     return ht_acc           
 
 
@@ -350,8 +356,8 @@ def enhance_hs_acc(ht_acc, rho, theta):
     ht_acc_enh : np.array
         Enhansed version of ht_acc used to extract highest peaks more easily
     """
-    h = len(rho) - 1
-    w = len(theta) - 1
+    h = 6
+    w = math.ceil(5 * math.pi / 180)
     ht_acc_enh = np.array(ht_acc)
     idxes = np.argwhere(ht_acc_enh >= MIN_ACCEPT_HEIGHT)
     for row_col in idxes:
@@ -360,6 +366,7 @@ def enhance_hs_acc(ht_acc, rho, theta):
         if integer != 0:
             ht_acc_enh[row_col[0], row_col[1]] = h * w *  ht_acc_enh[row_col[0], row_col[1]] ** 2 / integer
     return ht_acc_enh
+
 
 def hough_transform(points):
     """
@@ -548,13 +555,15 @@ def vert_dist_is_valid(peak1, peak2):
     return [False, ang_dif]
 
 def find_valid_peaks_pair(peaks):
+    answer = []
     for current_peak in peaks[:-1]:
         cur_idx = peaks.index(current_peak)
         for other_peak in peaks[cur_idx + 1:]:
             condition, ang_dif = vert_dist_is_valid(current_peak, other_peak)
             if condition:
-                output = [current_peak, other_peak]
-                return output, ang_dif
+                output = [current_peak, other_peak, ang_dif]
+                answer.append(output)
+    return answer
 
 def find_intersection(line1, line2):  
     rho1, theta1 = line1
@@ -565,6 +574,48 @@ def find_intersection(line1, line2):
     b_matrix = np.array([rho1, rho2])
     x_y = np.linalg.solve(a_matrix, b_matrix)
     return x_y
+
+def gen_expected_perimeters(valid_peaks_pairs):
+    for pair in valid_peaks_pairs:
+        len_a = abs(pair[0]["ksi1"] - pair[0]["ksi2"]) / math.sin(pair[2])
+        len_b = abs(pair[1]["ksi1"] - pair[1]["ksi2"]) / math.sin(pair[2])
+        pair.append({"exp_per" : 2 * (len_a + len_b)})    
+
+def get_sides_parameters(sides_pair):
+    side1 = [sides_pair[0]["ksi1"], sides_pair[0]["beta"]]
+    side2 = [sides_pair[0]["ksi2"], sides_pair[0]["beta"]]
+    side3 = [sides_pair[1]["ksi1"], sides_pair[1]["beta"]]
+    side4 = [sides_pair[1]["ksi2"], sides_pair[1]["beta"]]
+    return [side1, side2, side3, side4]
+
+def gen_actual_perimeters(valid_peaks_pairs, points):
+    for pair in valid_peaks_pairs:
+        actual_perimeter = 0
+        # Get sides line equation parameters: rho, theta
+        sides_list = get_sides_parameters(pair)
+        # Count points near each side
+        for side in sides_list:
+            # Get distance between point and side line
+            for point in points:
+                pt_lin_distance = abs(point[0]*math.cos(side[1]) +
+                                     point[1]*math.sin(side[1]) -
+                                     side[0])
+                if pt_lin_distance <= APROX_WIDTH:
+                    actual_perimeter += 1
+        pair[3].update({"act_per" : actual_perimeter})
+
+def validate_perimeter(valid_sides_pairs):
+    best_pair = None
+    min_delta = float("inf")
+    for pair in valid_sides_pairs:
+        val_par_condition = abs(pair[3]["act_per"] - pair[3]["exp_per"]) < PERIMETER_T * pair[3]["exp_per"]
+        delta = abs(abs(pair[3]["act_per"] - pair[3]["exp_per"]) - PERIMETER_T * pair[3]["exp_per"])
+        if val_par_condition and delta < min_delta:
+            best_pair = pair
+            min_delta = delta
+    return best_pair
+            
+
     
 def run_algorithm(figure):
     '''
@@ -602,25 +653,24 @@ def run_algorithm(figure):
     #rho_theta_pairs = top_n_rho_theta_pairs(ht_acc, 10, rhos, thetas)
     cooriented_peaks = get_cooriented_pairs(ht_acc, rho_theta_pairs, rhos, thetas, d_theta)
     extended_peaks = gen_extended_peaks(cooriented_peaks)
-    valid_peaks, ang_dif = find_valid_peaks_pair(extended_peaks)
-
-    side1 = [valid_peaks[0]["ksi1"], valid_peaks[0]["beta"]]
-    side2 = [valid_peaks[0]["ksi2"], valid_peaks[0]["beta"]]
-    side3 = [valid_peaks[1]["ksi1"], valid_peaks[1]["beta"]]
-    side4 = [valid_peaks[1]["ksi2"], valid_peaks[1]["beta"]]
-    x1_y1 = find_intersection(side1, side4)
-    x2_y2 = find_intersection(side1, side3)
-    x3_y3 = find_intersection(side2, side3)
-    x4_y4 = find_intersection(side2, side4)
+    valid_peaks_pairs = find_valid_peaks_pair(extended_peaks)
+    gen_expected_perimeters(valid_peaks_pairs)
+    gen_actual_perimeters(valid_peaks_pairs, figure)
+    final_pairs = validate_perimeter(valid_peaks_pairs)
+    sides = get_sides_parameters(final_pairs)
+    x1_y1 = find_intersection(sides[0], sides[3])
+    x2_y2 = find_intersection(sides[0], sides[2])
+    x3_y3 = find_intersection(sides[1], sides[2])
+    x4_y4 = find_intersection(sides[1], sides[3])
     vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
 
-    return thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices
+    return thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks_pairs, vertices
 
 
 #================================================TEST CASES=======================================================
 thetas, rhos, ht_acc, ht_acc_enh, rho_theta_pairs, cooriented_peaks, extended_peaks, valid_peaks, vertices = run_algorithm(FIGURE)
 
-
+print (np.shape(assign_figure(FIGURE)))
 
 ring1 = LinearRing(assign_figure(FIGURE))
 x1, y1 = ring1.xy
