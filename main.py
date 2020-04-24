@@ -13,32 +13,29 @@ MIN_ACCEPT_HEIGHT = np.array(3)
 LENGHT_T = 0.3
 DIST_T = 0.6
 APROX_WIDTH = 0.1
-PERIMETER_T = 0.3
+PERIMETER_T = 0.2
 
 # Rho and theta discretive step (accumulator's resolution)
+#RHO_RES = 1
 RHO_RES = MIN_ACCEPT_HEIGHT / 10.0
+#THETA_RES = 0.017453*10
 THETA_RES = 0.0174533*RHO_RES # 0.0174533 rad = 1 grad
 
-MIN_PEAKS_TO_FIND = 50
+MIN_PEAKS_TO_FIND = 60
 
 # Choose figure to run
-FIGURE = "example 2"
-print ("START_MIN_ACCEPT_HEIGHT: ", MIN_ACCEPT_HEIGHT)
-print ("LENGHT_T: ", LENGHT_T)
-print ("DIST_T: ", DIST_T)
-print ("FIGURE: ", FIGURE)
+FILE_PATH = "Testing_Figures/1.txt"
 
 
-def assign_figure_v2(file_path):
+def assign_figure(file_path):
     file = open(file_path, "r")
     points = []
     for line in file:
         row = line.split()
-        points.append([row[0], row[1]])
+        points.append([float(row[0]), float(row[1])])
     return np.array(points)
 
-
-def assign_figure(figure_name):
+def assign_figure_v2(figure_name):
     '''
     
     Parameters
@@ -317,7 +314,7 @@ def create_rho_theta(x_max, y_max):
     theta = np.linspace(-math.pi / 2, 0.0, math.ceil(math.pi/ (2*THETA_RES) + 1))
     theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
 
-    D = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
+    D = np.sqrt((x_max + 10)**2 + (y_max + 10)**2)
     q = math.ceil(D/RHO_RES)
     nrho = 2*q + 1
     rho = np.linspace(-q*RHO_RES, q*RHO_RES, nrho)
@@ -353,23 +350,6 @@ def fill_hs_acc(ht_acc, points, rho, theta):
     ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
     return ht_acc           
 
-def find_peaks(ht_acc, rhos, thetas):
-    rho_theta_acc = []
-    mask_height = 2
-    mask_width = 10 # 5 grads equivalent
-    while len(rho_theta_acc) < MIN_PEAKS_TO_FIND:
-        peak_idx_list = np.argwhere(ht_acc == np.amax(ht_acc)) # Get an index of the highest peak
-        for peak_idx in peak_idx_list:
-            acc_value = ht_acc[peak_idx[0], peak_idx[1]]
-            if acc_value != 0:
-                rho = rhos[peak_idx[0]]
-                theta = thetas[peak_idx[1]]
-                mask_origin = [peak_idx[0] - mask_height // 2, peak_idx[1] - mask_width // 2]
-                ht_acc[mask_origin[0] : mask_origin[0] + mask_height, 
-                           mask_origin[1] : mask_origin[1] + mask_width] = 0
-                rho_theta_acc.append([rho, theta, acc_value])
-    return rho_theta_acc
-
 def hough_transform(points):
     """
     Builds a Hough H(theta, rho) space for given arrai of (x,y) coordinates
@@ -402,8 +382,26 @@ def hough_transform(points):
     theta, rho = create_rho_theta(x_max, y_max)
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
-    #ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta)
     return theta, rho, ht_acc
+
+def find_peaks(ht_acc, rhos, thetas):
+    #rho_theta_acc = []
+    rho_theta_acc = set([])
+    mask_height = 2
+    mask_width = 2
+    while len(rho_theta_acc) < MIN_PEAKS_TO_FIND:
+        peak_idx_list = np.argwhere(ht_acc == np.amax(ht_acc)) # Get an index of the highest peak
+        for peak_idx in peak_idx_list:
+            acc_value = ht_acc[peak_idx[0], peak_idx[1]]
+            if acc_value != 0:
+                rho = rhos[peak_idx[0]]
+                theta = thetas[peak_idx[1]]
+                mask_origin = [peak_idx[0] - mask_height // 2, peak_idx[1] - mask_width // 2]
+                ht_acc[mask_origin[0] : mask_origin[0] + mask_height, 
+                           mask_origin[1] : mask_origin[1] + mask_width] = 0
+                #rho_theta_acc.append((rho, theta, acc_value))
+                rho_theta_acc.add((rho, theta, acc_value))
+    return list(rho_theta_acc)
 
 def get_cooriented_pairs(peaks, rhos, thetas,):
     """
@@ -453,12 +451,15 @@ def vert_dist_is_valid(peak1, peak2):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2)
+    
     if abs(ksi11 - ksi12) < MIN_ACCEPT_HEIGHT or abs(ksi21 - ksi22) < MIN_ACCEPT_HEIGHT:
         return [False, ang_dif]
+    
     vert_dist_cond1 = (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif)) / abs(ksi11 - ksi12)
     vert_dist_cond2 = (abs(ksi21 - ksi22) - C2 * math.sin(ang_dif)) / abs(ksi21 - ksi22)
     if max([vert_dist_cond1 , vert_dist_cond2]) < DIST_T:
         return [True, ang_dif]
+
     return [False, ang_dif]
 
 def find_valid_peaks_pair(peaks):
@@ -552,18 +553,16 @@ def run_algorithm(figure):
         DESCRIPTION. x and y coordinates corresponding to sinusoids in Hough Space
     
     '''
-    figure = assign_figure(figure)
     
-    #while valid_peaks == None and cur_min_accept_height  != np.array(3):
     thetas, rhos, ht_acc = hough_transform(figure)
-    rho_theta_acc= find_peaks(ht_acc, rhos, thetas)
-    #rho_theta_pairs = top_n_rho_theta_pairs(ht_acc, 10, rhos, thetas)
+    rho_theta_acc = find_peaks(ht_acc, rhos, thetas)
     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
     valid_peaks_pairs = find_valid_peaks_pair(extended_peaks)
+    print (len(valid_peaks_pairs))
     gen_expected_perimeters(valid_peaks_pairs)
     gen_actual_perimeters(valid_peaks_pairs, figure)
-    
     final_pairs = validate_perimeter(valid_peaks_pairs)
+    print (type(final_pairs))
     sides = get_sides_parameters(final_pairs)
     x1_y1 = find_intersection(sides[0], sides[3])
     x2_y2 = find_intersection(sides[0], sides[2])
@@ -575,12 +574,12 @@ def run_algorithm(figure):
 
 
 #================================================TEST CASES=======================================================
-'''
-thetas, rhos, ht_acc, rho_theta_pairs, extended_peaks, valid_peaks, vertices = run_algorithm(FIGURE)
 
-print (np.shape(assign_figure(FIGURE)))
+figure = assign_figure(FILE_PATH)
 
-ring1 = LinearRing(assign_figure(FIGURE))
+thetas, rhos, ht_acc, rho_theta_pairs, extended_peaks, valid_peaks, vertices = run_algorithm(figure)
+
+ring1 = LinearRing(figure)
 x1, y1 = ring1.xy
 
 ring2 = LinearRing(vertices)
@@ -589,12 +588,12 @@ x2, y2= ring2.xy
 fig = pyplot.figure(1, figsize=(5,5), dpi=90)
 example = fig.add_subplot(111)
 example.plot(x1, y1, marker = 'o')
-example.set_title(FIGURE)
+example.set_title(FILE_PATH)
 
 ans = fig.add_subplot(111)
 ans.plot(x2, y2)
-ans.set_title(FIGURE)
-'''
+ans.set_title(FILE_PATH)
 
-points = assign_figure_v2("acute.txt")
+
+#print (figure)
     
