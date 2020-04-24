@@ -13,24 +13,28 @@ from shapely.geometry.polygon import LinearRing
 
 # Assign parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(3)
-LENGHT_T = 0.5
-DIST_T = 0.5
-APROX_WIDTH = 0.5
+LENGHT_T = 0.3
+DIST_T = 0.6
+APROX_WIDTH = 0.1
 PERIMETER_T = 0.3
 
-THETA_RES = 0.0174533*0.3
-RHO_RES = 0.35
+
+RHO_RES = MIN_ACCEPT_HEIGHT / 10.0
+THETA_RES = 0.0174533*RHO_RES
 
 # Accumulator enhansing constants
 ENH_AREA_HEIGHT = 134
 ENH_AREA_WIDTH = 175
 ENH_MIN_ACCEPT_HEIGHT = np.array(ENH_AREA_HEIGHT * ENH_AREA_WIDTH)
 # Choose figure to run
-FIGURE = "example 3"
+FIGURE = "example 1"
 print ("START_MIN_ACCEPT_HEIGHT: ", MIN_ACCEPT_HEIGHT)
 print ("LENGHT_T: ", LENGHT_T)
 print ("DIST_T: ", DIST_T)
 print ("FIGURE: ", FIGURE)
+
+
+test_counter = 0
 
 def assign_figure(figure_name):
     '''
@@ -532,6 +536,7 @@ def get_cooriented_pairs(peaks, rhos, thetas,):
             is_parallel = abs(theta1 - theta2) < theta_t
             is_apropriate_lenght = abs(acc_value1- acc_value2) < LENGHT_T * (acc_value1 + acc_value2) * 0.5
             if is_parallel and is_apropriate_lenght:
+                # Create new extended peak
                 temp_dict = {"ksi1":rho1,
                              "ksi2":rho2,
                              "beta":0.5 * (theta1 + theta2),
@@ -571,7 +576,10 @@ def vert_dist_is_valid(peak1, peak2):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2)
-    if (ksi11 - ksi12) < MIN_ACCEPT_HEIGHT or (ksi21 - ksi22) < MIN_ACCEPT_HEIGHT:
+    if abs(ksi11 - ksi12) < MIN_ACCEPT_HEIGHT or abs(ksi21 - ksi22) < MIN_ACCEPT_HEIGHT:
+        #print((ksi11 - ksi12) - MIN_ACCEPT_HEIGHT)
+        #print ((ksi21 - ksi22) - MIN_ACCEPT_HEIGHT)
+        #print ()
         return [False, ang_dif]
     vert_dist_cond1 = (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif)) / abs(ksi11 - ksi12)
     vert_dist_cond2 = (abs(ksi21 - ksi22) - C2 * math.sin(ang_dif)) / abs(ksi21 - ksi22)
