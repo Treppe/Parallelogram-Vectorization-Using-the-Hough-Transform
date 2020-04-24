@@ -22,19 +22,13 @@ PERIMETER_T = 0.3
 RHO_RES = MIN_ACCEPT_HEIGHT / 10.0
 THETA_RES = 0.0174533*RHO_RES
 
-# Accumulator enhansing constants
-ENH_AREA_HEIGHT = 134
-ENH_AREA_WIDTH = 175
-ENH_MIN_ACCEPT_HEIGHT = np.array(ENH_AREA_HEIGHT * ENH_AREA_WIDTH)
 # Choose figure to run
-FIGURE = "example 1"
+FIGURE = "example 2"
 print ("START_MIN_ACCEPT_HEIGHT: ", MIN_ACCEPT_HEIGHT)
 print ("LENGHT_T: ", LENGHT_T)
 print ("DIST_T: ", DIST_T)
 print ("FIGURE: ", FIGURE)
 
-
-test_counter = 0
 
 def assign_figure(figure_name):
     '''
@@ -351,36 +345,7 @@ def fill_hs_acc(ht_acc, points, rho, theta):
     ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
     return ht_acc           
 
-
-def enhance_hs_acc(ht_acc, rho, theta):
-    """
-
-    Parameters
-    ----------
-    ht_acc : np.array
-        Hough transform accumulator matrix C (rho by theta)
-    rho : np.array
-        Ordered array of rhos represented by rows in C
-    theta : np.array
-        Ordered array of thetas represented by columns in C
-
-    Returns
-    -------
-    ht_acc_enh : np.array
-        Enhansed version of ht_acc used to extract highest peaks more easily
-    """
-    h = 3
-    w = math.ceil(5 * math.pi / 180)
-    ht_acc_enh = np.array(ht_acc)
-    indxes = np.argwhere(ht_acc_enh >= MIN_ACCEPT_HEIGHT)
-    for row_col in indxes:
-        mask_origin = ((row_col[0] - h) % h, (row_col[1] - w) % w)
-        integer = np.sum(ht_acc_enh[mask_origin[0] : mask_origin[0] + h, mask_origin[1] : mask_origin[1] + w])
-        if integer != 0:
-            ht_acc_enh[row_col[0], row_col[1]] = h * w *  ht_acc_enh[row_col[0], row_col[1]] ** 2 / integer
-    return ht_acc_enh
-
-def find_peaks_v2(ht_acc, rhos, thetas):
+def find_peaks(ht_acc, rhos, thetas):
     rho_theta_acc = []
     mask_height = 2
     mask_width = 10 # 5 grads equivalent
@@ -432,74 +397,6 @@ def hough_transform(points):
     #ht_acc_enh = enhance_hs_acc(ht_acc, rho, theta)
     return theta, rho, ht_acc
 
-def top_n_rho_theta_pairs(ht_acc_matrix, n, rhos, thetas):
-  '''
-  @param hough transform accumulator matrix H (rho by theta)
-  @param n pairs of rho and thetas desired
-  @param ordered array of rhos represented by rows in H
-  @param ordered array of thetas represented by columns in H
-  @return top n rho theta pairs in H by accumulator value
-  @return x,y indexes in H of top n rho theta pairs
-  '''
-  flat = list(set(np.hstack(ht_acc_matrix)))
-  flat_sorted = sorted(flat, key = lambda n: -n)
-  coords_sorted = [(np.argwhere(ht_acc_matrix == acc_value)) for acc_value in flat_sorted[0:n]]
-  rho_theta = []
-  x_y = []
-  for coords_for_val_idx in range(0, len(coords_sorted), 1):
-    coords_for_val = coords_sorted[coords_for_val_idx]
-    for i in range(0, len(coords_for_val), 1):
-      k,m = coords_for_val[i] # n by m matrix
-      rho = rhos[k]
-      theta = thetas[m]
-      rho_theta.append([rho, theta])
-      x_y.append([k, n]) # just to unnest and reorder coords_sorted
-  return rho_theta[0:n]
-
-def find_peaks(ht_acc_enh, rhos, thetas):
-    '''
-    
-
-    Parameters
-    ----------
-    ht_acc : np.array
-        Hough transform accumulator matrix C (rho by theta)
-
-    rhos : list
-        Ordered array of rhos represented by rows in C
-    thetas : list
-        Ordered array of thetas represented by columns in C
-
-    Returns
-    -------
-    rho_theta : list
-        List of rho and theta parameters for lines which got at least MIN_ACCEPT_HEIGHT voices
-        '''
-    rho_theta = []
-    flat = list(set(np.hstack(ht_acc_enh)))
-    flat = np.delete(flat, np.argwhere(flat < MIN_ACCEPT_HEIGHT))
-    flat_sorted = sorted(flat)
-    coords_sorted = [(np.argwhere(ht_acc_enh == acc_value)) for acc_value in flat_sorted]
-    rho_theta = []
-    for coords_for_val_idx in range(0, len(coords_sorted), 1):
-      coords_for_val = coords_sorted[coords_for_val_idx]
-      for idx in range(0, len(coords_for_val), 1):
-        k,m = coords_for_val[idx] # k by m matrix
-        rho = rhos[k]
-        theta = thetas[m]
-        rho_theta.append([rho, theta])
-    return rho_theta
-
-def peaks_to_dict(peak_pairs):
-    peaks_dict_list = []
-    temp_dict = {"rhos": None, "thetas": None, "acc_values": None}
-    for pair in peak_pairs:
-        temp_dict = {"rhos": [pair[0][0], pair[2][0]], 
-                     "thetas": [pair[0][1], pair[2][1]], 
-                     "acc_values": [pair[1], pair[3]]}
-        peaks_dict_list.append(temp_dict)
-    return peaks_dict_list
-
 def get_cooriented_pairs(peaks, rhos, thetas,):
     """
 
@@ -544,42 +441,11 @@ def get_cooriented_pairs(peaks, rhos, thetas,):
                 extended_peaks.append(temp_dict)
     return extended_peaks
 
-def gen_extended_peaks(peak_pairs):
-    """
-    
-
-    Parameters
-    ----------
-    pairs : list
-        Dict of chosen pairs of peaks from Hough Accumulator and their parameters.
-
-    Returns
-    -------
-    extended_peaks : list
-        List of 2 lists of parameters required for each peak for further parallelogram sides detecting. 
-
-    """
-    extended_peaks = []
-    for pair in peak_pairs:
-        ksi1, ksi2 = pair["rhos"]
-        acc_value1, acc_value2 = pair["acc_values"]
-        beta = 0.5 * (pair["thetas"][0] + pair["thetas"][1])
-        acc_value_extended = 0.5 * (acc_value1 + acc_value2)
-        temp_dict = {"ksi1":ksi1,
-                     "ksi2":ksi2,
-                     "beta":beta,
-                     "C_k":acc_value_extended}
-        extended_peaks.append(temp_dict)
-    return extended_peaks
-
 def vert_dist_is_valid(peak1, peak2):
     ksi11, ksi12, beta1, C1 = [peak1["ksi1"], peak1["ksi2"], peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, C2 = [peak2["ksi1"], peak2["ksi2"], peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2)
     if abs(ksi11 - ksi12) < MIN_ACCEPT_HEIGHT or abs(ksi21 - ksi22) < MIN_ACCEPT_HEIGHT:
-        #print((ksi11 - ksi12) - MIN_ACCEPT_HEIGHT)
-        #print ((ksi21 - ksi22) - MIN_ACCEPT_HEIGHT)
-        #print ()
         return [False, ang_dif]
     vert_dist_cond1 = (abs(ksi11 - ksi12) - C1 * math.sin(ang_dif)) / abs(ksi11 - ksi12)
     vert_dist_cond2 = (abs(ksi21 - ksi22) - C2 * math.sin(ang_dif)) / abs(ksi21 - ksi22)
@@ -682,7 +548,7 @@ def run_algorithm(figure):
     
     #while valid_peaks == None and cur_min_accept_height  != np.array(3):
     thetas, rhos, ht_acc = hough_transform(figure)
-    rho_theta_acc= find_peaks_v2(ht_acc, rhos, thetas)
+    rho_theta_acc= find_peaks(ht_acc, rhos, thetas)
     #rho_theta_pairs = top_n_rho_theta_pairs(ht_acc, 10, rhos, thetas)
     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
     valid_peaks_pairs = find_valid_peaks_pair(extended_peaks)
