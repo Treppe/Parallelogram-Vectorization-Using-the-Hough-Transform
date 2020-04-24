@@ -7,24 +7,25 @@ import numpy as np
 import math
 from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
+from shapely.geometry import Polygon
 
 # Parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(3)
 LENGHT_T = 0.3
-DIST_T = 0.3
+DIST_T = 0.5
 APROX_WIDTH = 0.1
-PERIMETER_T = 0.2
+PERIMETER_T = 0.1
 
 # Rho and theta discretive step (accumulator's resolution)
 #RHO_RES = 1
 RHO_RES = MIN_ACCEPT_HEIGHT / 10.0
 #THETA_RES = 0.017453*10
 THETA_RES = 0.0174533*RHO_RES # 0.0174533 rad = 1 grad
-
+THETA_T = THETA_RES * 3
 MIN_PEAKS_TO_FIND = 50
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/perfect.txt"
+FILE_PATH = "Testing_Figures/acute.txt"
 
 
 def assign_figure(file_path):
@@ -78,16 +79,6 @@ def create_rho_theta(x_max, y_max):
         Empty array representing rho dimension
 
     """
-    # Create theta dimension
-    #n_max = max(x_max, y_max)
-    #d_theta = math.pi / (2*(n_max - 1))
-    #theta = np.arange(-math.pi/2, math.pi/2, d_theta)
-    # Create rho dimension
-    # Max rho length is the distance to the farrest possible (x,y) point 
-    # in given points array
-    #distance = np.sqrt((x_max - 1)**2 + (y_max - 1)**2)
-    #d_rho = math.pi/4 # Num of rho steps between min and max rho
-    #rho = np.arange(-distance, distance, d_rho)
     theta = np.linspace(-math.pi / 2, 0.0, math.ceil(math.pi/ (2*THETA_RES) + 1))
     theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
 
@@ -162,10 +153,9 @@ def hough_transform(points):
     return theta, rho, ht_acc
 
 def find_peaks(ht_acc, rhos, thetas):
-    #rho_theta_acc = []
     rho_theta_acc = set([])
-    mask_height = 2
-    mask_width = 2
+    mask_height = 1
+    mask_width = 1
     while len(rho_theta_acc) < MIN_PEAKS_TO_FIND:
         acc_max = np.amax(ht_acc)
         acc_h, acc_w = np.shape(ht_acc) 
@@ -186,7 +176,7 @@ def find_peaks(ht_acc, rhos, thetas):
             break
     return list(rho_theta_acc)
 
-def get_cooriented_pairs(peaks, rhos, thetas,):
+def get_cooriented_pairs(peaks, rhos, thetas):
     """
 
     Parameters
@@ -212,14 +202,14 @@ def get_cooriented_pairs(peaks, rhos, thetas,):
         Pairs of peaks occuring at the same orientation theta, and with similar heights.
 
     """
-    theta_t = THETA_RES * 3
+    
     extended_peaks = []
     for current_peak in peaks[:-1]:
         cur_idx = peaks.index(current_peak)
         for compare_peak in peaks[cur_idx + 1:]:
             rho1, theta1, acc_value1 = current_peak
             rho2, theta2, acc_value2 = compare_peak
-            is_parallel = abs(theta1 - theta2) < theta_t
+            is_parallel = abs(theta1 - theta2) < THETA_T
             is_apropriate_lenght = abs(acc_value1- acc_value2) < LENGHT_T * (acc_value1 + acc_value2) * 0.5
             if is_parallel and is_apropriate_lenght:
                 # Create new extended peak
@@ -270,44 +260,29 @@ def gen_expected_perimeters(valid_peaks_pairs):
     for pair in valid_peaks_pairs:
         len_a = abs(pair[0]["ksi1"] - pair[0]["ksi2"]) / math.sin(pair[2])
         len_b = abs(pair[1]["ksi1"] - pair[1]["ksi2"]) / math.sin(pair[2])
-        pair.append({"exp_per" : 2 * (len_a + len_b)})    
+        pair.append({"exp_per" : 2 * (len_a + len_b)})
 
+def gen_actual_perimeter(edge_points):
+    return Polygon(edge_points).length
+
+def validate_perimeter(valid_sides_pairs, actual_perimeter):
+    best_pair = None
+    min_delta = float("inf")
+    for pair in valid_sides_pairs:
+        val_par_condition = abs(actual_perimeter - pair[3]["exp_per"]) < PERIMETER_T * pair[3]["exp_per"]
+        delta = abs(abs(actual_perimeter - pair[3]["exp_per"]) - PERIMETER_T * pair[3]["exp_per"])
+        if val_par_condition and delta < min_delta:
+            best_pair = pair
+            min_delta = delta
+    return best_pair
+       
 def get_sides_parameters(sides_pair):
     side1 = [sides_pair[0]["ksi1"], sides_pair[0]["beta"]]
     side2 = [sides_pair[0]["ksi2"], sides_pair[0]["beta"]]
     side3 = [sides_pair[1]["ksi1"], sides_pair[1]["beta"]]
     side4 = [sides_pair[1]["ksi2"], sides_pair[1]["beta"]]
     return [side1, side2, side3, side4]
-
-def gen_actual_perimeters(valid_peaks_pairs, points):
-    for pair in valid_peaks_pairs:
-        actual_perimeter = 0
-        # Get sides line equation parameters: rho, theta
-        sides_list = get_sides_parameters(pair)
-        # Count points near each side
-        for side in sides_list:
-            counted_points = []
-            # Get distance between point and side line
-            for point in points:
-                pt_lin_distance = abs(point[0]*math.cos(side[1]) +
-                                     point[1]*math.sin(side[1]) -
-                                     side[0])
-                if pt_lin_distance <= APROX_WIDTH and list(point) not in counted_points:
-                    actual_perimeter += 1
-                    counted_points.append(list(point))
-        pair[3].update({"act_per" : actual_perimeter})
-
-def validate_perimeter(valid_sides_pairs):
-    best_pair = None
-    min_delta = float("inf")
-    for pair in valid_sides_pairs:
-        val_par_condition = abs(pair[3]["act_per"] - pair[3]["exp_per"]) < PERIMETER_T * pair[3]["exp_per"]
-        delta = abs(abs(pair[3]["act_per"] - pair[3]["exp_per"]) - PERIMETER_T * pair[3]["exp_per"])
-        if val_par_condition and delta < min_delta:
-            best_pair = pair
-            min_delta = delta
-    return best_pair
-            
+     
 def run_algorithm(figure):
     '''
     
@@ -343,8 +318,8 @@ def run_algorithm(figure):
     valid_peaks_pairs = find_valid_peaks_pair(extended_peaks)
     print (len(valid_peaks_pairs))
     gen_expected_perimeters(valid_peaks_pairs)
-    gen_actual_perimeters(valid_peaks_pairs, figure)
-    final_pairs = validate_perimeter(valid_peaks_pairs)
+    actual_perimeter = gen_actual_perimeter(figure)
+    final_pairs = validate_perimeter(valid_peaks_pairs, actual_perimeter)
     print (type(final_pairs))
     sides = get_sides_parameters(final_pairs)
     x1_y1 = find_intersection(sides[0], sides[3])
@@ -353,14 +328,14 @@ def run_algorithm(figure):
     x4_y4 = find_intersection(sides[1], sides[3])
     vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
 
-    return thetas, rhos, ht_acc, rho_theta_acc, extended_peaks, valid_peaks_pairs, vertices
+    return vertices
 
 
 #================================================TEST CASES=======================================================
 
 figure = assign_figure(FILE_PATH)
 
-thetas, rhos, ht_acc, rho_theta_pairs, extended_peaks, valid_peaks, vertices = run_algorithm(figure)
+vertices = run_algorithm(figure)
 
 ring1 = LinearRing(figure)
 x1, y1 = ring1.xy
