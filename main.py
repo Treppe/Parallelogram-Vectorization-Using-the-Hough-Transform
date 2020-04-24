@@ -8,19 +8,18 @@ import math
 from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 
-
-# Assign rho and theta discretive step (accumulator's resolution)
-
-# Assign parallelogram detecting thresholds
+# Parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(3)
 LENGHT_T = 0.3
 DIST_T = 0.6
 APROX_WIDTH = 0.1
 PERIMETER_T = 0.3
 
-
+# Rho and theta discretive step (accumulator's resolution)
 RHO_RES = MIN_ACCEPT_HEIGHT / 10.0
-THETA_RES = 0.0174533*RHO_RES
+THETA_RES = 0.0174533*RHO_RES # 0.0174533 rad = 1 grad
+
+MIN_PEAKS_TO_FIND = 50
 
 # Choose figure to run
 FIGURE = "example 2"
@@ -28,6 +27,15 @@ print ("START_MIN_ACCEPT_HEIGHT: ", MIN_ACCEPT_HEIGHT)
 print ("LENGHT_T: ", LENGHT_T)
 print ("DIST_T: ", DIST_T)
 print ("FIGURE: ", FIGURE)
+
+
+def assign_figure_v2(file_path):
+    file = open(file_path, "r")
+    points = []
+    for line in file:
+        row = line.split()
+        points.append([row[0], row[1]])
+    return np.array(points)
 
 
 def assign_figure(figure_name):
@@ -349,7 +357,7 @@ def find_peaks(ht_acc, rhos, thetas):
     rho_theta_acc = []
     mask_height = 2
     mask_width = 10 # 5 grads equivalent
-    while len(rho_theta_acc) < 50:
+    while len(rho_theta_acc) < MIN_PEAKS_TO_FIND:
         peak_idx_list = np.argwhere(ht_acc == np.amax(ht_acc)) # Get an index of the highest peak
         for peak_idx in peak_idx_list:
             acc_value = ht_acc[peak_idx[0], peak_idx[1]]
@@ -567,6 +575,7 @@ def run_algorithm(figure):
 
 
 #================================================TEST CASES=======================================================
+'''
 thetas, rhos, ht_acc, rho_theta_pairs, extended_peaks, valid_peaks, vertices = run_algorithm(FIGURE)
 
 print (np.shape(assign_figure(FIGURE)))
@@ -585,5 +594,7 @@ example.set_title(FIGURE)
 ans = fig.add_subplot(111)
 ans.plot(x2, y2)
 ans.set_title(FIGURE)
+'''
 
+points = assign_figure_v2("acute.txt")
     
