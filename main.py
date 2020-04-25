@@ -12,20 +12,19 @@ from shapely.geometry import Polygon
 # Parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(3)
 LENGHT_T = 0.3
-DIST_T = 0.5
-APROX_WIDTH = 0.1
-PERIMETER_T = 0.1
+DIST_T = 0.55
+PERIMETER_T = 0.0001
 
 # Rho and theta discretive step (accumulator's resolution)
-#RHO_RES = 1
-RHO_RES = MIN_ACCEPT_HEIGHT / 10.0
+RHO_RES = 1
+#RHO_RES = MIN_ACCEPT_HEIGHT / 15.0
 #THETA_RES = 0.017453*10
 THETA_RES = 0.0174533*RHO_RES # 0.0174533 rad = 1 grad
 THETA_T = THETA_RES * 3
-MIN_PEAKS_TO_FIND = 50
+MIN_PEAKS_TO_FIND = 100
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/acute.txt"
+FILE_PATH = "Testing_Figures/perfect.txt"
 
 
 def assign_figure(file_path):
@@ -115,7 +114,7 @@ def fill_hs_acc(ht_acc, points, rho, theta):
                     y*math.sin(theta[thIdx])
             rhoIdx = np.nonzero(np.abs(rho-rhoVal) == np.min(np.abs(rho-rhoVal)))[0]
             ht_acc[rhoIdx, thIdx] += 1
-    ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
+    #ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
     return ht_acc           
 
 def hough_transform(points):
@@ -256,7 +255,7 @@ def find_intersection(line1, line2):
     x_y = np.linalg.solve(a_matrix, b_matrix)
     return x_y
 
-def gen_expected_perimeters(valid_peaks_pairs):
+def gen_expected_perimeters(valid_peaks_pairs, len_factor):
     for pair in valid_peaks_pairs:
         len_a = abs(pair[0]["ksi1"] - pair[0]["ksi2"]) / math.sin(pair[2])
         len_b = abs(pair[1]["ksi1"] - pair[1]["ksi2"]) / math.sin(pair[2])
@@ -311,14 +310,17 @@ def run_algorithm(figure):
         DESCRIPTION. x and y coordinates corresponding to sinusoids in Hough Space
     
     '''
-    
+    global DIST_T, PERIMETER_T
+    actual_perimeter = gen_actual_perimeter(figure)
+    edge_perimeter = np.shape(figure)[0]
+    len_factor = actual_perimeter / edge_perimeter
+    DIST_T = DIST_T * len_factor
     thetas, rhos, ht_acc = hough_transform(figure)
     rho_theta_acc = find_peaks(ht_acc, rhos, thetas)
     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
     valid_peaks_pairs = find_valid_peaks_pair(extended_peaks)
     print (len(valid_peaks_pairs))
-    gen_expected_perimeters(valid_peaks_pairs)
-    actual_perimeter = gen_actual_perimeter(figure)
+    gen_expected_perimeters(valid_peaks_pairs, len_factor)
     final_pairs = validate_perimeter(valid_peaks_pairs, actual_perimeter)
     print (type(final_pairs))
     sides = get_sides_parameters(final_pairs)
@@ -340,17 +342,17 @@ vertices = run_algorithm(figure)
 ring1 = LinearRing(figure)
 x1, y1 = ring1.xy
 
-ring2 = LinearRing(vertices)
-x2, y2= ring2.xy
+#ring2 = LinearRing(vertices)
+#x2, y2= ring2.xy
 
 fig = pyplot.figure(1, figsize=(5,5), dpi=90)
 example = fig.add_subplot(111)
 example.plot(x1, y1, marker = 'o')
 example.set_title(FILE_PATH)
 
-ans = fig.add_subplot(111)
-ans.plot(x2, y2)
-ans.set_title(FILE_PATH)
+#ans = fig.add_subplot(111)
+#ans.plot(x2, y2)
+#ans.set_title(FILE_PATH)
 
 
 #print (figure)
