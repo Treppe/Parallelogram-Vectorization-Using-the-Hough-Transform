@@ -11,21 +11,21 @@ from shapely.geometry.polygon import LinearRing
 from shapely.geometry import Polygon
 
 # Parallelogram detecting thresholds
-MIN_ACCEPT_HEIGHT = np.array(3)
+MIN_ACCEPT_HEIGHT = np.array(4)
 LENGHT_T = 0.3
-DIST_T = 0.55
-PERIMETER_T = 0.0001
+DIST_T = 0.3
+PERIMETER_T = 0.1
 
 # Rho and theta discretive step (accumulator's resolution)
-RHO_RES = 1
-# RHO_RES = MIN_ACCEPT_HEIGHT / 15.0
+#RHO_RES = 1
+RHO_RES = MIN_ACCEPT_HEIGHT / 10.0
 # THETA_RES = 0.017453*10
 THETA_RES = 0.0174533*RHO_RES  # 0.0174533 rad = 1 grad
 THETA_T = THETA_RES * 3
 MIN_PEAKS_TO_FIND = 100
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/perfect.txt"
+FILE_PATH = "Testing_Figures/1.txt"
 
 
 def assign_figure(file_path):
@@ -114,11 +114,11 @@ def fill_hs_acc(ht_acc, points, rho, theta):
 
     """
     for x__, y__ in points:
-        for theta_idx in enumerate(theta):
+        for theta_idx in range(len(theta)):
             rho_val = x__*math.cos(theta[theta_idx]) + \
                     y__*math.sin(theta[theta_idx])
-            rho_idx = (np.nonzero(np.abs(rho-rho_val)) ==
-                       np.min(np.abs(rho-rho_val))[0])
+            rho_idx = (np.nonzero(np.abs(rho-rho_val) ==
+                       np.min(np.abs(rho-rho_val)))[0])
             ht_acc[rho_idx, theta_idx] += 1
     ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
     return ht_acc
@@ -235,7 +235,7 @@ def get_cooriented_pairs(peaks, rhos, thetas):
     return extended_peaks
 
 
-def vert_dist_is_valid(peak1, peak2):
+def vert_dist_is_valid(peak1, peak2, dist_t):
     ksi11, ksi12, beta1, c_1 = [peak1["ksi1"], peak1["ksi2"],
                                 peak1["beta"], peak1["C_k"]]
     ksi21, ksi22, beta2, c_2 = [peak2["ksi1"], peak2["ksi2"],
@@ -250,18 +250,19 @@ def vert_dist_is_valid(peak1, peak2):
                        abs(ksi11 - ksi12))
     vert_dist_cond2 = ((abs(ksi21 - ksi22) - c_2 * math.sin(ang_dif)) /
                        abs(ksi21 - ksi22))
-    if max([vert_dist_cond1, vert_dist_cond2]) < DIST_T:
+    if max([vert_dist_cond1, vert_dist_cond2]) < dist_t:
         return [True, ang_dif]
 
     return [False, ang_dif]
 
 
-def find_valid_peaks_pair(peaks):
+def find_valid_peaks_pair(peaks, dist_t):
     answer = []
     for current_peak in peaks[:-1]:
         cur_idx = peaks.index(current_peak)
         for other_peak in peaks[cur_idx + 1:]:
-            condition, ang_dif = vert_dist_is_valid(current_peak, other_peak)
+            condition, ang_dif = vert_dist_is_valid(current_peak, other_peak,
+                                                    dist_t)
             if condition:
                 output = [current_peak, other_peak, ang_dif]
                 answer.append(output)
@@ -338,15 +339,14 @@ def run_algorithm(points):
         in Hough Space
 
     '''
-    global DIST_T, PERIMETER_T
     actual_perimeter = Polygon(points).length
     edge_perimeter = np.shape(points)[0]
     len_factor = actual_perimeter / edge_perimeter
-    DIST_T = DIST_T * len_factor
+    dist_t_revised = DIST_T * len_factor
     thetas, rhos, ht_acc = hough_transform(points)
     rho_theta_acc = find_peaks(ht_acc, rhos, thetas)
     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
-    valid_peaks_pairs = find_valid_peaks_pair(extended_peaks)
+    valid_peaks_pairs = find_valid_peaks_pair(extended_peaks, dist_t_revised)
     print(len(valid_peaks_pairs))
     gen_expected_perimeters(valid_peaks_pairs, len_factor)
     final_pairs = validate_perimeter(valid_peaks_pairs, actual_perimeter)
