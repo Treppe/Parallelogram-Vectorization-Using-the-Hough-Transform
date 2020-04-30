@@ -11,21 +11,25 @@ from shapely.geometry.polygon import LinearRing
 from shapely.geometry import Polygon
 
 # Parallelogram detecting thresholds
-MIN_ACCEPT_HEIGHT = np.array(4)
+MIN_ACCEPT_HEIGHT = np.array(3)
 LENGHT_T = 0.3
 DIST_T = 0.3
-PERIMETER_T = 0.1
+PERIMETER_T = 0.001
 
 # Rho and theta discretive step (accumulator's resolution)
 #RHO_RES = 1
-RHO_RES = MIN_ACCEPT_HEIGHT / 10.0
+RHO_RES = 0.1 * MIN_ACCEPT_HEIGHT
 # THETA_RES = 0.017453*10
-THETA_RES = 0.0174533*RHO_RES  # 0.0174533 rad = 1 grad
+THETA_RES = 0.0174533 / 4 # 0.0174533 rad = 1 grad
 THETA_T = THETA_RES * 3
 MIN_PEAKS_TO_FIND = 100
 
+# Image Enhencement Constants
+ENH_H = 10
+ENH_W = 10
+
 # Choose figure to run
-FILE_PATH = "Testing_Figures/1.txt"
+FILE_PATH = "Testing_Figures/3.txt"
 
 
 def assign_figure(file_path):
@@ -88,7 +92,7 @@ def create_rho_theta(x_max, y_max):
     dummy = math.ceil(distance / RHO_RES)
     nrho = 2*dummy + 1
     rho = np.linspace(-dummy*RHO_RES, dummy*RHO_RES, nrho)
-    return theta, rho
+    return rho, theta
 
 
 def fill_hs_acc(ht_acc, points, rho, theta):
@@ -120,7 +124,8 @@ def fill_hs_acc(ht_acc, points, rho, theta):
             rho_idx = (np.nonzero(np.abs(rho-rho_val) ==
                        np.min(np.abs(rho-rho_val)))[0])
             ht_acc[rho_idx, theta_idx] += 1
-    ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
+    # ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
+    
     return ht_acc
 
 
@@ -156,16 +161,33 @@ def hough_transform(points):
         A theta threshold required for further computation
     """
     x_max, y_max = find_max_points(points)
-    theta, rho = create_rho_theta(x_max, y_max)
+    rho, theta = create_rho_theta(x_max, y_max)
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
-    return theta, rho, ht_acc
+    
+    return rho, theta, ht_acc
+
+def enhance(ht_acc):
+    heigth, width = np.shape(ht_acc)
+    ht_acc_enh = np.array(ht_acc)
+    nonzero = np.nonzero(ht_acc)
+    for idx in np.argwhere(ht_acc > 0):
+        integr = np.sum(ht_acc[idx[0] - ENH_H if idx[0] - ENH_H > 0 else 0 :
+                               idx[0] + ENH_H if idx[0] + ENH_H < heigth - 1 else heigth - 1,
+                               idx[1] - ENH_W if idx[1] - ENH_H > 0 else 0 :
+                               idx[1] + ENH_W if idx[1] + ENH_W < width - 1 else width - 1 ])
+        if integr != 0:
+            print("Hello")
+            ht_acc_enh[idx[0], idx[1]] = ENH_H * ENH_W * ht_acc[idx[0], idx[1]]**2 / integr
+    
+    return ht_acc_enh
 
 
 def find_peaks(ht_acc, rhos, thetas):
     rho_theta_acc = set([])
     mask_height = 1
-    mask_width = 1
+    mask_width = 4
+    
     while len(rho_theta_acc) < MIN_PEAKS_TO_FIND:
         acc_max = np.amax(ht_acc)
         if acc_max != 0:
@@ -184,6 +206,7 @@ def find_peaks(ht_acc, rhos, thetas):
                 rho_theta_acc.add((rho, theta, acc_value))
         else:
             break
+        
     return list(rho_theta_acc)
 
 
@@ -343,7 +366,8 @@ def run_algorithm(points):
     edge_perimeter = np.shape(points)[0]
     len_factor = actual_perimeter / edge_perimeter
     dist_t_revised = DIST_T * len_factor
-    thetas, rhos, ht_acc = hough_transform(points)
+    rhos, thetas, ht_acc = hough_transform(points)
+    ht_acc_enh = enhance(ht_acc)
     rho_theta_acc = find_peaks(ht_acc, rhos, thetas)
     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
     valid_peaks_pairs = find_valid_peaks_pair(extended_peaks, dist_t_revised)
