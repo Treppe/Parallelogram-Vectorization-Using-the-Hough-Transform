@@ -21,7 +21,7 @@ PERIMETER_T = 0.01
 #RHO_RES = 1
 RHO_RES = 0.05 * MIN_ACCEPT_HEIGHT
 # THETA_RES = 0.017453*10
-THETA_RES = 0.0174533 / 10 # 0.0174533 rad = 1 grad
+THETA_RES = 0.0174533 * RHO_RES # 0.0174533 rad = 1 grad
 THETA_T = THETA_RES * 3
 MIN_PEAKS_TO_FIND = 50
 
@@ -283,16 +283,16 @@ def vert_dist_is_valid(peak1, peak2, dist_t):
 
 
 def find_valid_peaks_pair(peaks, dist_t):
-    answer = []
-    for current_peak in peaks[:-1]:
-        cur_idx = peaks.index(current_peak)
-        for other_peak in peaks[cur_idx + 1:]:
-            condition, ang_dif = vert_dist_is_valid(current_peak, other_peak,
-                                                    dist_t)
-            if condition:
-                output = [current_peak, other_peak, ang_dif]
-                answer.append(output)
-    return answer
+    valid_peaks_pairs = []
+    #for current_peak in peaks[:-1]:
+        #cur_idx = peaks.index(current_peak)
+        #for other_peak in peaks[cur_idx + 1:]:
+    for peak1, peak2 in itertools.combinations(peaks, 2):
+        condition, ang_dif = vert_dist_is_valid(peak1, peak2,
+                                                dist_t)
+        if condition:
+            valid_peaks_pairs.append([peak1, peak2, ang_dif])
+    return valid_peaks_pairs
 
 
 def find_intersection(line1, line2):
