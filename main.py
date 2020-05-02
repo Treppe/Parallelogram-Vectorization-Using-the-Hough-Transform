@@ -4,6 +4,7 @@ into a set of four points - an ideal parallelogram.
 '''
 
 import math
+import itertools
 
 import numpy as np
 from matplotlib import pyplot
@@ -12,7 +13,7 @@ from shapely.geometry import Polygon
 
 # Parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(3)
-LENGHT_T = 0.001
+LENGHT_T = 0.5
 DIST_T = 0.5
 PERIMETER_T = 0.01
 
@@ -237,23 +238,26 @@ def get_cooriented_pairs(peaks, rhos, thetas, len_factor):
         heights.
 
     """
-
     extended_peaks = []
-    for current_peak in peaks[:-1]:
-        cur_idx = peaks.index(current_peak)
-        for compare_peak in peaks[cur_idx + 1:]:
-            rho1, theta1, acc_value1 = current_peak
-            rho2, theta2, acc_value2 = compare_peak
-            is_parallel = abs(theta1 - theta2) < THETA_T
-            is_apropriate_lenght = (abs(acc_value1 - acc_value2) <
-                                    LENGHT_T * (acc_value1 + acc_value2) * 0.5)
-            if is_parallel and is_apropriate_lenght:
-                # Create new extended peak
-                temp_dict = {"ksi1": rho1,
-                             "ksi2": rho2,
-                             "beta": 0.5 * (theta1 + theta2),
-                             "C_k": 0.5 * (acc_value1 + acc_value2) * len_factor}
-                extended_peaks.append(temp_dict)
+    #for current_peak in peaks[:-1]:
+     #   cur_idx = peaks.index(current_peak)
+      #  for compare_peak in peaks[cur_idx + 1:]:
+    for peak1, peak2 in itertools.combinations(peaks, 2):
+        rho1, theta1, acc_value1 = peak1
+        rho2, theta2, acc_value2 = peak2
+        
+        is_parallel = abs(theta1 - theta2) < THETA_T
+        is_apropriate_lenght = (abs(acc_value1 - acc_value2) <
+                                LENGHT_T * (acc_value1 + acc_value2) * 0.5)
+        
+        if is_parallel and is_apropriate_lenght:
+            # Generate new extended peak
+            new_peak_dict = {"ksi1": rho1,
+                         "ksi2": rho2,
+                         "beta": 0.5 * (theta1 + theta2),
+                         "C_k": 0.5 * (acc_value1 + acc_value2) * len_factor}
+            extended_peaks.append(new_peak_dict)
+            
     return extended_peaks
 
 
