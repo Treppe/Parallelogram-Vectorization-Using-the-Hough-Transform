@@ -11,6 +11,7 @@ from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
 from shapely.geometry import Polygon
 
+
 # Parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(3)
 LENGHT_T = 0.5
@@ -23,7 +24,11 @@ RHO_RES = 0.05 * MIN_ACCEPT_HEIGHT
 # THETA_RES = 0.017453*10
 THETA_RES = 0.0174533 * RHO_RES # 0.0174533 rad = 1 grad
 THETA_T = THETA_RES * 3
-MIN_PEAKS_TO_FIND = 50
+MIN_PEAKS_TO_FIND = 100
+
+# MASK CONSTATS
+MASK_HEIGHT = 10
+MASK_WIDTH = 10
 
 # Image Enhencement Constants
 ENH_H = 10
@@ -85,6 +90,7 @@ def create_rho_theta(x_max, y_max):
         Empty array representing rho dimension
 
     """
+    
     theta = np.linspace(-math.pi / 2, 0.0,
                         math.ceil(math.pi / (2*THETA_RES) + 1))
     theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
@@ -93,6 +99,7 @@ def create_rho_theta(x_max, y_max):
     dummy = math.ceil(distance / RHO_RES)
     nrho = 2*dummy + 1
     rho = np.linspace(-dummy*RHO_RES, dummy*RHO_RES, nrho)
+    
     return rho, theta
 
 
@@ -118,6 +125,7 @@ def fill_hs_acc(ht_acc, points, rho, theta):
         Filled Hough accumulator
 
     """
+    
     for x__, y__ in points:
         for theta_idx in range(len(theta)):
             rho_val = x__*math.cos(theta[theta_idx]) + \
@@ -161,6 +169,7 @@ def hough_transform(points):
     theta_T : float
         A theta threshold required for further computation
     """
+    
     x_max, y_max = find_max_points(points)
     rho, theta = create_rho_theta(x_max, y_max)
     ht_acc = np.zeros((len(rho), len(theta)))
@@ -184,25 +193,27 @@ def enhance(ht_acc):
 
 def find_peaks(ht_acc, rhos, thetas):
     rho_theta_acc = set([])
-    mask_height = 20
-    mask_width = 20
+    
     
     while len(rho_theta_acc) < MIN_PEAKS_TO_FIND:
         acc_max = np.amax(ht_acc)
+        
         if acc_max != 0:
             # Get an index of the highest peak
             peak_idx_list = np.argwhere(ht_acc == acc_max)
+            
             for peak_idx in peak_idx_list:
                 acc_value = ht_acc[peak_idx[0], peak_idx[1]]
+                
                 if acc_value != 0:
                     rho = rhos[peak_idx[0]]
                     theta = thetas[peak_idx[1]]
-                    mask_origin = np.array([(peak_idx[0] - mask_height // 2),
-                                            (peak_idx[1] - mask_width // 2)])
+                    mask_origin = np.array([(peak_idx[0] - MASK_HEIGHT // 2),
+                                            (peak_idx[1] - MASK_WIDTH // 2)])
                     mask_origin[mask_origin < 0] = 0
     
-                    ht_acc[mask_origin[0]: mask_origin[0] + mask_height,
-                           mask_origin[1]: mask_origin[1] + mask_width] = 0
+                    ht_acc[mask_origin[0]: mask_origin[0] + MASK_HEIGHT,
+                           mask_origin[1]: mask_origin[1] + MASK_WIDTH] = 0
                     rho_theta_acc.add((rho, theta, acc_value))
         else:
             break
