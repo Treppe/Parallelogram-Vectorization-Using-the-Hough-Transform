@@ -12,17 +12,17 @@ from shapely.geometry import Polygon
 
 # Parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(3)
-LENGHT_T = 0.3
-DIST_T = 0.3
-PERIMETER_T = 0.001
+LENGHT_T = 0.001
+DIST_T = 0.5
+PERIMETER_T = 0.01
 
 # Rho and theta discretive step (accumulator's resolution)
 #RHO_RES = 1
-RHO_RES = 0.1 * MIN_ACCEPT_HEIGHT
+RHO_RES = 0.05 * MIN_ACCEPT_HEIGHT
 # THETA_RES = 0.017453*10
-THETA_RES = 0.0174533 / 4 # 0.0174533 rad = 1 grad
+THETA_RES = 0.0174533 / 10 # 0.0174533 rad = 1 grad
 THETA_T = THETA_RES * 3
-MIN_PEAKS_TO_FIND = 100
+MIN_PEAKS_TO_FIND = 50
 
 # Image Enhencement Constants
 ENH_H = 10
@@ -124,7 +124,7 @@ def fill_hs_acc(ht_acc, points, rho, theta):
             rho_idx = (np.nonzero(np.abs(rho-rho_val) ==
                        np.min(np.abs(rho-rho_val)))[0])
             ht_acc[rho_idx, theta_idx] += 1
-    # ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
+    ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
     
     return ht_acc
 
@@ -170,14 +170,12 @@ def hough_transform(points):
 def enhance(ht_acc):
     heigth, width = np.shape(ht_acc)
     ht_acc_enh = np.array(ht_acc)
-    nonzero = np.nonzero(ht_acc)
     for idx in np.argwhere(ht_acc > 0):
         integr = np.sum(ht_acc[idx[0] - ENH_H if idx[0] - ENH_H > 0 else 0 :
                                idx[0] + ENH_H if idx[0] + ENH_H < heigth - 1 else heigth - 1,
                                idx[1] - ENH_W if idx[1] - ENH_H > 0 else 0 :
                                idx[1] + ENH_W if idx[1] + ENH_W < width - 1 else width - 1 ])
         if integr != 0:
-            print("Hello")
             ht_acc_enh[idx[0], idx[1]] = ENH_H * ENH_W * ht_acc[idx[0], idx[1]]**2 / integr
     
     return ht_acc_enh
@@ -185,8 +183,8 @@ def enhance(ht_acc):
 
 def find_peaks(ht_acc, rhos, thetas):
     rho_theta_acc = set([])
-    mask_height = 1
-    mask_width = 4
+    mask_height = 20
+    mask_width = 20
     
     while len(rho_theta_acc) < MIN_PEAKS_TO_FIND:
         acc_max = np.amax(ht_acc)
@@ -195,22 +193,23 @@ def find_peaks(ht_acc, rhos, thetas):
             peak_idx_list = np.argwhere(ht_acc == acc_max)
             for peak_idx in peak_idx_list:
                 acc_value = ht_acc[peak_idx[0], peak_idx[1]]
-                rho = rhos[peak_idx[0]]
-                theta = thetas[peak_idx[1]]
-                mask_origin = np.array([(peak_idx[0] - mask_height // 2),
-                                        (peak_idx[1] - mask_width // 2)])
-                mask_origin[mask_origin < 0] = 0
-
-                ht_acc[mask_origin[0]: mask_origin[0] + mask_height,
-                       mask_origin[1]: mask_origin[1] + mask_width] = 0
-                rho_theta_acc.add((rho, theta, acc_value))
+                if acc_value != 0:
+                    rho = rhos[peak_idx[0]]
+                    theta = thetas[peak_idx[1]]
+                    mask_origin = np.array([(peak_idx[0] - mask_height // 2),
+                                            (peak_idx[1] - mask_width // 2)])
+                    mask_origin[mask_origin < 0] = 0
+    
+                    ht_acc[mask_origin[0]: mask_origin[0] + mask_height,
+                           mask_origin[1]: mask_origin[1] + mask_width] = 0
+                    rho_theta_acc.add((rho, theta, acc_value))
         else:
             break
         
     return list(rho_theta_acc)
 
 
-def get_cooriented_pairs(peaks, rhos, thetas):
+def get_cooriented_pairs(peaks, rhos, thetas, len_factor):
     """
 
     Parameters
@@ -253,7 +252,7 @@ def get_cooriented_pairs(peaks, rhos, thetas):
                 temp_dict = {"ksi1": rho1,
                              "ksi2": rho2,
                              "beta": 0.5 * (theta1 + theta2),
-                             "C_k": 0.5 * (acc_value1 + acc_value2)}
+                             "C_k": 0.5 * (acc_value1 + acc_value2) * len_factor}
                 extended_peaks.append(temp_dict)
     return extended_peaks
 
@@ -265,9 +264,9 @@ def vert_dist_is_valid(peak1, peak2, dist_t):
                                 peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2)
 
-    if (abs(ksi11 - ksi12) < MIN_ACCEPT_HEIGHT or
-            abs(ksi21 - ksi22) < MIN_ACCEPT_HEIGHT):
-        return [False, ang_dif]
+    # if (abs(ksi11 - ksi12) < MIN_ACCEPT_HEIGHT or
+            # abs(ksi21 - ksi22) < MIN_ACCEPT_HEIGHT):
+        # return [False, ang_dif]
 
     vert_dist_cond1 = ((abs(ksi11 - ksi12) - c_1 * math.sin(ang_dif)) /
                        abs(ksi11 - ksi12))
@@ -365,12 +364,12 @@ def run_algorithm(points):
     actual_perimeter = Polygon(points).length
     edge_perimeter = np.shape(points)[0]
     len_factor = actual_perimeter / edge_perimeter
-    dist_t_revised = DIST_T * len_factor
+    # dist_t_revised = DIST_T * len_factor
     rhos, thetas, ht_acc = hough_transform(points)
-    ht_acc_enh = enhance(ht_acc)
+    # ht_acc_enh = enhance(ht_acc)
     rho_theta_acc = find_peaks(ht_acc, rhos, thetas)
-    extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
-    valid_peaks_pairs = find_valid_peaks_pair(extended_peaks, dist_t_revised)
+    extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas, len_factor)
+    valid_peaks_pairs = find_valid_peaks_pair(extended_peaks, DIST_T)
     print(len(valid_peaks_pairs))
     gen_expected_perimeters(valid_peaks_pairs, len_factor)
     final_pairs = validate_perimeter(valid_peaks_pairs, actual_perimeter)
