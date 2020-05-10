@@ -14,9 +14,9 @@ from shapely.geometry import Polygon
 
 # Parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(4)
-LENGHT_T = 0.3
+LENGHT_T = 0.5
 DIST_T = 0.5
-PERIMETER_T = 0.01
+PERIMETER_T = 0.1
 
 # Rho and theta discretive step (accumulator's resolution)
 RHO_RES = 0.1
@@ -405,7 +405,7 @@ def run_algorithm(points):
     
     rhos, thetas, ht_acc = hough_transform(points)
     # ht_acc_enh = enhance(ht_acc)
-    rho_theta_acc = find_peaks_v2(ht_acc, rhos, thetas)
+    rho_theta_acc = find_peaks(ht_acc, rhos, thetas)
     
     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
     valid_peaks_pairs = find_valid_peaks_pair(extended_peaks, DIST_T)
