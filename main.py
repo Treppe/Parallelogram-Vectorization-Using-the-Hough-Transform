@@ -13,26 +13,34 @@ from shapely.geometry import Polygon
 
 
 # Parallelogram detecting thresholds
-MIN_ACCEPT_HEIGHT = np.array(4)
-LENGHT_T = 0.5
+# =============================================================================
+# <<<<<<< Updated upstream
+# MIN_ACCEPT_HEIGHT = np.array(4)
+# =======
+MIN_ACCEPT_HEIGHT = np.array(3)
+# >>>>>>> Stashed changes
+# =============================================================================
+LENGHT_T = 0.1
 DIST_T = 0.5
 PERIMETER_T = 0.1
 
-# Rho and theta discretive step (accumulator's resolution)
-RHO_RES = 0.1
-#RHO_RES = 0.1 * MIN_ACCEPT_HEIGHT
-# THETA_RES = 0.017453*10
-THETA_RES = 0.01745331 # 0.0174533 rad = 1 grad
-THETA_T = THETA_RES * 3
-MIN_PEAKS_TO_FIND = 100
-
-# MASK CONSTATS
-MASK_HEIGHT = 1
-MASK_WIDTH = 1
-
-# Image Enhencement Constants
-ENH_H = 5
-ENH_W = 5
+# =============================================================================
+# # Rho and theta discretive step (accumulator's resolution)
+# RHO_RES = 1
+# #RHO_RES = 0.1 * MIN_ACCEPT_HEIGHT
+# # THETA_RES = 0.017453*10
+# THETA_RES = 0.01745331 # 0.0174533 rad = 1 grad
+# THETA_T = THETA_RES * 3
+# MIN_PEAKS_TO_FIND = 100
+# 
+# # MASK CONSTATS
+# MASK_HEIGHT = 1
+# MASK_WIDTH = 1
+# 
+# # Image Enhencement Constants
+# ENH_H = 5
+# ENH_W = 5
+# =============================================================================
 
 # Choose figure to run
 FILE_PATH = "Testing_Figures/1.txt"
@@ -93,28 +101,33 @@ def create_rho_theta(points):
     """
     global THETA_T
     x_min, x_max, y_min, y_max = find_min_max_points(points)
+    img_height = y_max - y_min
+    img_width = x_max - x_min
+    
     n_max = max(x_max - x_min, y_max - y_min)
     
-    d_theta = math.pi / (2*(n_max - 1))
+    d_theta = math.pi / (4*(n_max - 1))
     THETA_T = 3 * d_theta
-    d_rho = math.pi / 4
-    
-    theta = np.arange(-math.pi/2, math.pi/2, d_theta)
-    
+    d_rho = math.pi / 8
+     
+    theta = np.arange(-math.pi / 2, math.pi / 2 + d_theta, d_theta)
+     
     distance = np.sqrt((x_max + 1)**2 + (y_max + 1)**2)
     rho = np.arange(-distance, distance, d_rho)
 # =============================================================================
+# =============================================================================
 #     theta = np.linspace(-math.pi / 2, 0.0,
-#                         math.ceil(math.pi / (2*THETA_RES) + 1))
+#                          math.ceil(math.pi / (2*THETA_RES) + 1))
 #     theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
-# 
+#   
 #     distance = np.sqrt((x_max + 1)**2 + (y_max + 1)**2)
 #     dummy = math.ceil(distance / RHO_RES)
 #     nrho = 2*dummy + 1
 #     rho = np.linspace(-dummy*RHO_RES, dummy*RHO_RES, nrho)
 # =============================================================================
+# =============================================================================
     
-    return rho, theta
+    return rho, theta, img_height, img_width, d_rho, d_theta
 
 
 def fill_hs_acc(ht_acc, points, rho, theta):
@@ -147,7 +160,7 @@ def fill_hs_acc(ht_acc, points, rho, theta):
             rho_idx = (np.nonzero(np.abs(rho-rho_val) ==
                        np.min(np.abs(rho-rho_val)))[0])
             ht_acc[rho_idx, theta_idx] += 1
-    ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
+    # ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
     
     return ht_acc
 
@@ -185,62 +198,48 @@ def hough_transform(points):
     """
     
     
-    rho, theta = create_rho_theta(points)
+    rho, theta, img_height, img_width, d_rho, d_theta = create_rho_theta(points)
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
-    print(np.shape(ht_acc))
-    return rho, theta, ht_acc
+    return rho, theta, ht_acc, img_height, img_width, d_rho, d_theta
 
-def enhance(rect_region, heigth = 1):
-    width = np.shape(rect_region)
-    
-    integr = np.sum(rect_region)
-    region_enh = (heigth * width / integr) * rect_region ** 2
-    
-    return region_enh
-
-
-def find_peaks_v2(ht_acc, rhos, thetas):
-    rho_theta_acc = []
-    
-    for row in range(np.shape(ht_acc)[0]):
+def enhance(ht_acc, img_h, img_w, d_rho, d_theta):
+    h = int(img_h) // 4
+    w = int(img_w) // 4
+    #h = d_rho // (math.sqrt((img_h / 2)**2 + (img_w / 2)**2))
+    #w = d_theta // (5 * math.pi / img_w)
+    ht_acc_enh = np.copy(ht_acc)
+    for row in range(ht_acc.shape[0]):
         if np.sum(ht_acc[row, :]) != 0:
-            ht_acc_enh = enhance(ht_acc[row, :])
-            col = np.argmax(ht_acc_enh)
-            acc_value = ht_acc[row, col]
-            if acc_value != 0:
-                rho = rhos[row]
-                theta = thetas[col]
-                rho_theta_acc.append([rho, theta, acc_value])
-    
-    return rho_theta_acc
+            for col in range(ht_acc.shape[1]):
+                mask_origin = np.array([row - h // 2, col - w//2])
+                mask_origin[mask_origin < 0] = 0
+                integral = np.sum(ht_acc_enh[mask_origin[0] : mask_origin[0] + 
+                                             h + 1, 
+                                             mask_origin[1] : mask_origin[1] +
+                                             w + 1])
+                if integral != 0:
+                    ht_acc_enh[row, col] = (h * w * ht_acc[row, col]**2 / 
+                                            integral) 
+    return ht_acc_enh
 
-def find_peaks(ht_acc, rhos, thetas):
+
+
+def find_peaks(ht_acc, rhos, thetas, img_h, img_w, d_rho, d_theta):
     rho_theta_acc = []
-    
+    ht_acc_enh = enhance(ht_acc, img_h, img_w, d_rho, d_theta)
     while True:
-        acc_max = np.amax(ht_acc)
-        
-        if acc_max >= MIN_ACCEPT_HEIGHT:
-            # Get an index of the highest peak
-            peak_idx_list = np.argwhere(ht_acc == acc_max)
-            
-            for peak_idx in peak_idx_list:
-                acc_value = ht_acc[peak_idx[0], peak_idx[1]]
-                if acc_value != 0:
-                    rho = rhos[peak_idx[0]]
-                    theta = thetas[peak_idx[1]]
-                    mask_origin = np.array([(peak_idx[0] - MASK_HEIGHT // 2),
-                                            (peak_idx[1] - MASK_WIDTH // 2)])
-                    mask_origin[mask_origin < 0] = 0
-    
-                    ht_acc[mask_origin[0]: mask_origin[0] + MASK_HEIGHT,
-                           mask_origin[1]: mask_origin[1] + MASK_WIDTH] = 0
-                    rho_theta_acc.append((rho, theta, acc_value))
+        max_idx = np.where(ht_acc_enh == np.amax(ht_acc_enh))
+        h_peak = ht_acc[max_idx[0], max_idx[1]][0]  # Always returns only 1 point
+        if h_peak >= MIN_ACCEPT_HEIGHT:
+            rho = rhos[max_idx[0]][0]
+            theta = thetas[max_idx[1]][0]
+            rho_theta_acc.append((rho, theta, h_peak))
+            ht_acc_enh[max_idx[0], max_idx[1]] = 0
         else:
             break
-        
-    return list(rho_theta_acc)
+            
+    return rho_theta_acc
 
 
 def get_cooriented_pairs(peaks, rhos, thetas):
@@ -280,7 +279,7 @@ def get_cooriented_pairs(peaks, rhos, thetas):
         is_apropriate_lenght = (abs(acc_value1 - acc_value2) <
                                 LENGHT_T * (acc_value1 + acc_value2) * 0.5)
         
-        if is_parallel and is_apropriate_lenght and rho1 - rho2 != 0:
+        if is_parallel and is_apropriate_lenght:
             # Generate new extended peak
             new_peak_dict = {"ksi1": rho1,
                              "ksi2": rho2,
@@ -297,14 +296,15 @@ def vert_dist_is_valid(peak1, peak2, dist_t):
     ksi21, ksi22, beta2, c_2 = [peak2["ksi1"], peak2["ksi2"],
                                 peak2["beta"], peak2["C_k"]]
     ang_dif = abs(beta1 - beta2)
-
-    vert_dist_cond1 = ((abs(ksi11 - ksi12) - c_1 * math.sin(ang_dif)) /
-                       abs(ksi11 - ksi12))
-    vert_dist_cond2 = ((abs(ksi21 - ksi22) - c_2 * math.sin(ang_dif)) /
-                       abs(ksi21 - ksi22))
     
-    if max([vert_dist_cond1, vert_dist_cond2]) < dist_t:
-        return [True, ang_dif]
+    if ksi11 - ksi12 != 0 and ksi21 - ksi22 != 0:
+        vert_dist_cond1 = ((abs(ksi11 - ksi12) - c_1 * math.sin(ang_dif)) /
+                           abs(ksi11 - ksi12))
+        vert_dist_cond2 = ((abs(ksi21 - ksi22) - c_2 * math.sin(ang_dif)) /
+                           abs(ksi21 - ksi22))
+        
+        if max([vert_dist_cond1, vert_dist_cond2]) < dist_t:
+            return [True, ang_dif]
 
     return [False, ang_dif]
 
@@ -334,15 +334,17 @@ def gen_expected_perimeters(valid_peaks_pairs):
 
 def validate_perimeter(valid_sides_pairs, actual_perimeter):
     best_pair = None
-    min_delta = float("inf")
+    min_delta = float('inf')
     for pair in valid_sides_pairs:
         val_par_condition = (abs(actual_perimeter - pair["exp_per"]) <
-                             PERIMETER_T * pair["exp_per"])
-        delta = (abs(abs(actual_perimeter - pair["exp_per"]) -
-                     PERIMETER_T * pair["exp_per"]))
-        if val_par_condition and delta < min_delta:
-            best_pair = pair
-            min_delta = delta
+                              PERIMETER_T * pair["exp_per"])
+        if val_par_condition:
+            delta = (abs(abs(actual_perimeter - pair["exp_per"]) -
+                         PERIMETER_T * pair["exp_per"]))
+            if delta < min_delta:
+                best_pair = pair
+                min_delta = delta
+                
                   
     return best_pair
 
@@ -358,6 +360,31 @@ def get_sides_parameters(sides_pair):
     
     return [side1, side2, side3, side4]
 
+def validate_perimeter_v2(valid_sides_pairs, actual_perimeter):
+    min_dif = float("inf")
+    best_pair = None
+    for pair in valid_sides_pairs:
+        sides = get_sides_parameters(pair)
+        x1_y1 = find_intersection(sides[0], sides[3])
+        x2_y2 = find_intersection(sides[0], sides[2])
+        x3_y3 = find_intersection(sides[1], sides[2])
+        x4_y4 = find_intersection(sides[1], sides[3])
+        vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
+        exp_per = Polygon(vertices).length
+        per_dif = abs(actual_perimeter - exp_per)
+        if per_dif < min_dif:
+            min_dif = per_dif
+            best_pair = pair
+        
+    return best_pair
+    
+    
+def standart_deviastion(points_arr, figure_sides):
+    for point in points_arr:
+        for side in figure_sides:
+             pt_lin_distance = abs(point[0]*math.cos(side[1]) +
+                                   point[1]*math.sin(side[1]) -
+                                   - side[0])	                                  
 
 def find_intersection(line1, line2):
     rho1, theta1 = line1
@@ -401,45 +428,24 @@ def run_algorithm(points):
         in Hough Space
 
     '''
-    actual_perimeter = np.shape(points)[0]
+    actual_perimeter = Polygon(points).length
+    #actual_perimeter = np.shape(points)[0]    
+    rhos, thetas, ht_acc, img_height, img_width, d_rho, d_theta = hough_transform(points)
+    # Enhance test
+    #ht_acc_enh = enhance(ht_acc, img_height, img_width, d_rho, d_theta)
     
-    rhos, thetas, ht_acc = hough_transform(points)
+    #rhos, thetas, ht_acc = hough_transform(points)
     # ht_acc_enh = enhance(ht_acc)
-    rho_theta_acc = find_peaks(ht_acc, rhos, thetas)
+    rho_theta_acc = find_peaks(ht_acc, rhos, thetas, img_height, img_width, d_rho, d_theta)
     
     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
     valid_peaks_pairs = find_valid_peaks_pair(extended_peaks, DIST_T)
     print("valid_peaks_len: ", len(valid_peaks_pairs))
     
     gen_expected_perimeters(valid_peaks_pairs)
-    final_pairs = validate_perimeter(valid_peaks_pairs, actual_perimeter)
-    #print("final_pairs type: ", type(final_pairs))
+    final_pairs = validate_perimeter_v2(valid_peaks_pairs, actual_perimeter)
+    print("final_pairs type: ", type(final_pairs))
     
-# =============================================================================
-#     vertices = []
-#     for pairs in valid_peaks_pairs: 
-#         sides = get_sides_parameters(pairs)
-#         x1_y1 = find_intersection(sides[0], sides[3])
-#         x2_y2 = find_intersection(sides[0], sides[2])
-#         x3_y3 = find_intersection(sides[1], sides[2])
-#         x4_y4 = find_intersection(sides[1], sides[3])
-#         vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
-#         
-#         ring1 = LinearRing(points)
-#         x1, y1 = ring1.xy
-#         
-#         ring2 = LinearRing(vertices)
-#         x2, y2 = ring2.xy
-#         
-#         fig = pyplot.figure(1, figsize=(5, 5), dpi=90)
-#         example = fig.add_subplot(111)
-#         example.plot(x1, y1, marker='o')
-#         example.set_title(FILE_PATH)
-#         
-#         ans = fig.add_subplot(111)
-#         ans.plot(x2, y2)
-#         ans.set_title(FILE_PATH)
-# =============================================================================
     sides = get_sides_parameters(final_pairs)
     x1_y1 = find_intersection(sides[0], sides[3])
     x2_y2 = find_intersection(sides[0], sides[2])
