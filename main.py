@@ -20,7 +20,7 @@ from shapely.geometry import Polygon
 MIN_ACCEPT_HEIGHT = np.array(3)
 # >>>>>>> Stashed changes
 # =============================================================================
-LENGHT_T = 0.1
+LENGHT_T = 0.5
 DIST_T = 0.5
 PERIMETER_T = 0.1
 
@@ -234,6 +234,7 @@ def find_peaks(ht_acc, rhos, thetas, img_h, img_w, d_rho, d_theta):
         if h_peak >= MIN_ACCEPT_HEIGHT:
             rho = rhos[max_idx[0]][0]
             theta = thetas[max_idx[1]][0]
+            print(h_peak, rho, theta)
             rho_theta_acc.append((rho, theta, h_peak))
             ht_acc_enh[max_idx[0], max_idx[1]] = 0
         else:
