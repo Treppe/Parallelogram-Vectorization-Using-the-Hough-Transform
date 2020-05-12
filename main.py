@@ -13,14 +13,14 @@ from shapely.geometry import Polygon
 
 
 # Parallelogram detecting thresholds
-MIN_ACCEPT_HEIGHT = np.array(3)
-LENGHT_T = 0.5
-DIST_T = 0.5
-PERIMETER_T = 0.1
+MIN_ACCEPT_HEIGHT = np.array(3)     # Used in find_peaks()
+LENGHT_T = 0.3                      # Used in get_paired_peaks() for coorientation validation step
+DIST_T = 0.3                        # Used in vert_dist_is_valid() for distance validation step
+PERIMETER_T = 0.1                   # Used in validate_perimeter() for perimeter validation step
 
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/3.txt"
+FILE_PATH = "Testing_Figures/1.txt"
 
 def assign_figure(file_path):
     assert isinstance(file_path, str), "file_path must be string."
@@ -244,7 +244,9 @@ def get_paired_peaks(hough_acc):
                              "acc value": 0.5 * (acc_value1 + 
                                                  acc_value2)}
             extended_peaks.append(new_peak_dict)
-            
+    assert len(extended_peaks) >= 2, \
+            "At least 2 pairs must pass coorientation validation step. " + \
+                "But only " + str(len(extended_peaks)) +  " were found." 
     return extended_peaks
 
 
@@ -277,7 +279,9 @@ def gen_parallelograms_sides(peaks_list):
                          "sides_b" : peak2,
                          "ang_dif" : ang_dif}
             parallelograms_sides.append(temp_dict)
-            
+    
+    assert len(parallelograms_sides) > 0, \
+            "All sides combinations failed distance validation step."
     return parallelograms_sides
 
 
