@@ -16,11 +16,11 @@ from shapely.geometry import Polygon
 MIN_ACCEPT_HEIGHT = np.array(3)     # Used in find_peaks()
 LENGHT_T = 0.3                      # Used in get_paired_peaks() for coorientation validation step
 DIST_T = 0.5                        # Used in vert_dist_is_valid() for distance validation step
-PERIMETER_T = 0.1                   # Used in validate_perimeter() for perimeter validation step
+PERIMETER_T = 0.01                   # Used in validate_perimeter() for perimeter validation step
 
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/3.txt"
+FILE_PATH = "Testing_Figures/1.txt"
 
 def assign_figure(file_path):
     assert isinstance(file_path, str), "file_path must be string."
@@ -366,6 +366,23 @@ def find_intersection(line1, line2):
     return x_y
 
 
+def get_vertices(parall_sides):
+    x1_y1 = find_intersection(parall_sides[0], parall_sides[3])
+    x2_y2 = find_intersection(parall_sides[0], parall_sides[2])
+    x3_y3 = find_intersection(parall_sides[1], parall_sides[2])
+    x4_y4 = find_intersection(parall_sides[1], parall_sides[3])
+    return [x1_y1, x2_y2, x3_y3, x4_y4]
+
+
+def build_plot(polygon_vers, title):
+    ring1 = LinearRing(polygon_vers)
+    x, y = ring1.xy
+     
+    fig = pyplot.figure(1, figsize=(5, 5), dpi=90)
+    polygon = fig.add_subplot(111)
+    polygon.plot(x, y, marker='o')
+    polygon.set_title(title)
+    
 
 def run_algorithm(points):
     '''
@@ -403,32 +420,13 @@ def run_algorithm(points):
     potent_paralls = gen_parallelograms_sides(paired_peaks)                     # Parameters of 4 sides
                                                                                 # potential desired parallelogram candidates
     gen_expected_perimeters(potent_paralls)
-    best_parall = validate_perimeter(potent_paralls, image["perimeter"])
-#     print("final_pairs type: ", type(final_pairs))
-#     
-#     sides = get_sides_parameters(final_pairs)
-#     x1_y1 = find_intersection(sides[0], sides[3])
-#     x2_y2 = find_intersection(sides[0], sides[2])
-#     x3_y3 = find_intersection(sides[1], sides[2])
-#     x4_y4 = find_intersection(sides[1], sides[3])
-#     vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
-#     
-#     ring1 = LinearRing(points)
-#     x1, y1 = ring1.xy
-#     
-#     ring2 = LinearRing(vertices)
-#     x2, y2 = ring2.xy
-#     
-#     fig = pyplot.figure(1, figsize=(5, 5), dpi=90)
-#     example = fig.add_subplot(111)
-#     example.plot(x1, y1, marker='o')
-#     example.set_title(FILE_PATH)
-#     
-#     ans = fig.add_subplot(111)
-#     ans.plot(x2, y2)
-#     ans.set_title(FILE_PATH)
-# =============================================================================
-    return 0 
+    best_parall = validate_perimeter(potent_paralls, image["perimeter"])  
+    parall_sides = get_sides_parameters(best_parall)
+    vertices = get_vertices(parall_sides)
+    
+    build_plot(points, FILE_PATH)
+    build_plot(vertices, "Solution")
+    
 
 run_algorithm(assign_figure(FILE_PATH))
 
