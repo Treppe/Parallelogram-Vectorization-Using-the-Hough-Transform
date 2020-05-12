@@ -20,7 +20,7 @@ PERIMETER_T = 0.1
 
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/1.txt"
+FILE_PATH = "Testing_Figures/3.txt"
 
 def assign_figure(file_path):
     assert isinstance(file_path, str), "file_path must be string."
@@ -176,11 +176,13 @@ def find_peaks(hough_acc, img):
     
     while True:
         max_idx = np.where(hough_acc_enh == np.amax(hough_acc_enh))
-        peak = hough_acc["accumulator"][max_idx[0], max_idx[1]][0]
-        if peak >= MIN_ACCEPT_HEIGHT:
+        acc_value = hough_acc["accumulator"][max_idx[0], max_idx[1]][0]
+        if acc_value >= MIN_ACCEPT_HEIGHT:
             rho = hough_acc["rho space"][max_idx[0]][0]
             theta = hough_acc["theta space"][max_idx[1]][0]
-            rho_theta_acc.append((rho, theta, peak))
+            rho_theta_acc.append({"rho": rho,
+                                   "theta": theta,
+                                   "acc value": acc_value})
             hough_acc_enh[max_idx[0], max_idx[1]] = 0
         else:
             break
@@ -188,7 +190,7 @@ def find_peaks(hough_acc, img):
     hough_acc["Hough peaks"] = rho_theta_acc
 
 
-def get_cooriented_pairs(peaks, rhos, thetas):
+def get_paired_peaks(hough_acc):
     """
 
     Parameters
@@ -217,30 +219,29 @@ def get_cooriented_pairs(peaks, rhos, thetas):
 
     """
     extended_peaks = []
-    for peak1, peak2 in itertools.combinations(peaks, 2):
-        rho1, theta1, acc_value1 = peak1
-        rho2, theta2, acc_value2 = peak2
-        
-        is_parallel = abs(theta1 - theta2) < THETA_T
-        is_apropriate_lenght = (abs(acc_value1 - acc_value2) <
-                                LENGHT_T * (acc_value1 + acc_value2) * 0.5)
+    for peak1, peak2 in itertools.combinations(hough_acc["Hough peaks"], 2):        
+        is_parallel = abs(peak1["theta"] - peak2["theta"]) < THETA_T
+        is_apropriate_lenght = (abs(peak1["acc value"] - peak2["acc value"]) <
+                                LENGHT_T * (peak1["acc value"] + \
+                                            peak2["acc value"]) * 0.5)
         
         if is_parallel and is_apropriate_lenght:
             # Generate new extended peak
-            new_peak_dict = {"ksi1": rho1,
-                             "ksi2": rho2,
-                             "beta": 0.5 * (theta1 + theta2),
-                             "C_k": 0.5 * (acc_value1 + acc_value2)}
+            new_peak_dict = {"ksi1": peak1["rho"],
+                             "ksi2": peak2["rho"],
+                             "beta": 0.5 * (peak1["theta"] + peak2["theta"]),
+                             "acc value": 0.5 * (peak1["acc value"] + 
+                                                 peak2["acc value"])}
             extended_peaks.append(new_peak_dict)
             
     return extended_peaks
 
 
-def vert_dist_is_valid(peak1, peak2, dist_t):
+def vert_dist_is_valid(peak1, peak2):
     ksi11, ksi12, beta1, c_1 = [peak1["ksi1"], peak1["ksi2"],
-                                peak1["beta"], peak1["C_k"]]
+                                peak1["beta"], peak1["acc value"]]
     ksi21, ksi22, beta2, c_2 = [peak2["ksi1"], peak2["ksi2"],
-                                peak2["beta"], peak2["C_k"]]
+                                peak2["beta"], peak2["acc value"]]
     ang_dif = abs(beta1 - beta2)
     
     if ksi11 - ksi12 != 0 and ksi21 - ksi22 != 0:
@@ -249,24 +250,24 @@ def vert_dist_is_valid(peak1, peak2, dist_t):
         vert_dist_cond2 = ((abs(ksi21 - ksi22) - c_2 * math.sin(ang_dif)) /
                            abs(ksi21 - ksi22))
         
-        if max([vert_dist_cond1, vert_dist_cond2]) < dist_t:
+        if max([vert_dist_cond1, vert_dist_cond2]) < DIST_T:
             return [True, ang_dif]
 
     return [False, ang_dif]
 
 
-def find_valid_peaks_pair(peaks, dist_t):
-    valid_peaks_pairs = []
+def gen_parallelograms_sides(peaks_list):
+    parallelograms_sides = []
     
-    for peak1, peak2 in itertools.combinations(peaks, 2):
-        condition, ang_dif = vert_dist_is_valid(peak1, peak2, dist_t)
+    for peak1, peak2 in itertools.combinations(peaks_list, 2):
+        condition, ang_dif = vert_dist_is_valid(peak1, peak2)
         if condition:
             temp_dict = {"sides_a" : peak1,
                          "sides_b" : peak2,
                          "ang_dif" : ang_dif}
-            valid_peaks_pairs.append(temp_dict)
+            parallelograms_sides.append(temp_dict)
             
-    return valid_peaks_pairs
+    return parallelograms_sides
 
 
 def gen_expected_perimeters(valid_peaks_pairs):
@@ -377,11 +378,9 @@ def run_algorithm(points):
 # =============================================================================
     image = gen_shape_dict(points)
     hough_acc = hough_transform(image)
-    find_peaks(hough_acc, image)
-#     rho_theta_acc = find_peaks(ht_acc, rhos, thetas, img_height, img_width, d_rho, d_theta)
-#     
-#     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
-#     valid_peaks_pairs = find_valid_peaks_pair(extended_peaks, DIST_T)
+    find_peaks(hough_acc, image)     
+    paired_peaks = get_paired_peaks(hough_acc)
+    parallelograms_sides = gen_parallelograms_sides(paired_peaks)
 #     print("valid_peaks_len: ", len(valid_peaks_pairs))
 #     
 #     gen_expected_perimeters(valid_peaks_pairs)
