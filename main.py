@@ -173,9 +173,10 @@ def find_peaks(hough_acc, img):
     rho_theta_acc = []
     hough_acc_enh = enhance(hough_acc["accumulator"], 
                             img["height"], img["width"])
+    
     while True:
         max_idx = np.where(hough_acc_enh == np.amax(hough_acc_enh))
-        peak = hough_acc[max_idx[0], max_idx[1]]
+        peak = hough_acc["accumulator"][max_idx[0], max_idx[1]][0]
         if peak >= MIN_ACCEPT_HEIGHT:
             rho = hough_acc["rho space"][max_idx[0]][0]
             theta = hough_acc["theta space"][max_idx[1]][0]
