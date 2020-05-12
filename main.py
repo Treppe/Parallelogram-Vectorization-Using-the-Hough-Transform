@@ -67,21 +67,17 @@ def create_rho_theta(hough_acc, img):
     rho : np.array
         Empty array representing rho dimension
 
-    """
-    global THETA_T
-    
+    """    
     n_max = max(img["x_max"] - img["x_min"], img["x_max"] - img["x_min"])
-    
     hough_acc["d_theta"] = math.pi / (4*(n_max - 1))
-    THETA_T = 3 * hough_acc["d_theta"]
     hough_acc["d_rho"] = math.pi / 8
-     
     hough_acc["theta space"] = np.arange(-math.pi / 2, math.pi / 2, 
                                          hough_acc["d_theta"])
-     
     distance = np.sqrt((img["x_max"] + 1)**2 + (img["y_max"] + 1)**2)
     hough_acc["rho space"] = np.arange(-distance, distance, hough_acc["d_rho"])
-
+    
+    global THETA_T
+    THETA_T = 3 * hough_acc["d_theta"]
 
 def fill_hs_acc(hough_acc, points):
     """
@@ -113,7 +109,6 @@ def fill_hs_acc(hough_acc, points):
             rho_idx = (np.nonzero(np.abs(hough_acc["rho space"]-rho_val) ==
                        np.min(np.abs(hough_acc["rho space"]-rho_val)))[0])
             hough_acc["accumulator"][rho_idx, theta_idx] += 1
-    # ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
 
 
 def hough_transform(img):
@@ -155,7 +150,7 @@ def hough_transform(img):
     return hough_acc
 
 
-def enhance(ht_acc, img_h, img_w, d_rho, d_theta):
+def enhance(ht_acc, img_h, img_w):
     h = int(img_h) // 4
     w = int(img_w) // 4
     ht_acc_enh = np.copy(ht_acc)
@@ -174,22 +169,22 @@ def enhance(ht_acc, img_h, img_w, d_rho, d_theta):
     return ht_acc_enh
 
 
-def find_peaks(ht_acc, rhos, thetas, img_h, img_w, d_rho, d_theta):
+def find_peaks(hough_acc, img):
     rho_theta_acc = []
-    ht_acc_enh = enhance(ht_acc, img_h, img_w, d_rho, d_theta)
+    hough_acc_enh = enhance(hough_acc["accumulator"], 
+                            img["height"], img["width"])
     while True:
-        max_idx = np.where(ht_acc_enh == np.amax(ht_acc_enh))
-        h_peak = ht_acc[max_idx[0], max_idx[1]][0]  # Always returns only 1 point
-        if h_peak >= MIN_ACCEPT_HEIGHT:
-            rho = rhos[max_idx[0]][0]
-            theta = thetas[max_idx[1]][0]
-            print(h_peak, rho, theta)
-            rho_theta_acc.append((rho, theta, h_peak))
-            ht_acc_enh[max_idx[0], max_idx[1]] = 0
+        max_idx = np.where(hough_acc_enh == np.amax(hough_acc_enh))
+        peak = hough_acc[max_idx[0], max_idx[1]]
+        if peak >= MIN_ACCEPT_HEIGHT:
+            rho = hough_acc["rho space"][max_idx[0]][0]
+            theta = hough_acc["theta space"][max_idx[1]][0]
+            rho_theta_acc.append((rho, theta, peak))
+            hough_acc_enh[max_idx[0], max_idx[1]] = 0
         else:
             break
             
-    return rho_theta_acc
+    hough_acc["Hough peaks"] = rho_theta_acc
 
 
 def get_cooriented_pairs(peaks, rhos, thetas):
@@ -381,7 +376,7 @@ def run_algorithm(points):
 # =============================================================================
     image = gen_shape_dict(points)
     hough_acc = hough_transform(image)
-
+    find_peaks(hough_acc, image)
 #     rho_theta_acc = find_peaks(ht_acc, rhos, thetas, img_height, img_width, d_rho, d_theta)
 #     
 #     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
