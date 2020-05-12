@@ -47,33 +47,8 @@ def gen_shape_dict(shape):
     img["width"] = img["x_max"] - img["x_min"]
     return img
 
-# =============================================================================
-# def find_min_max_points(points):
-#     """
-#     Find the highest value in each column of vector
-#     Parameters
-#     ----------
-#     point : np.array
-#         2D array of points where max values find to
-# 
-#     Returns
-#     -------
-#     x_max : float
-#         The highest value by x axis
-#     y_max : float
-#         The higest value by y axis
-# 
-#     """
-#     x_min = np.ceil(np.amin(points[:, 0]))
-#     x_max = np.ceil(np.amax(points[:, 0]))
-#     y_min = np.ceil(np.amin(points[:, 1]))
-#     y_max = np.ceil(np.amax(points[:, 1]))
-# 
-#     return x_min, x_max, y_min, y_max
-# =============================================================================
 
-
-def create_rho_theta(img, hough_acc):
+def create_rho_theta(hough_acc, img):
     """
     Helper function for Hough Transform
     Creates rho and theta dimension for enchaced Hough accumulator
@@ -95,21 +70,20 @@ def create_rho_theta(img, hough_acc):
     """
     global THETA_T
     
-    n_max = max(img["x_max"] - img["x_mi"], img["x_max"] - img["x_min"])
+    n_max = max(img["x_max"] - img["x_min"], img["x_max"] - img["x_min"])
     
     hough_acc["d_theta"] = math.pi / (4*(n_max - 1))
     THETA_T = 3 * hough_acc["d_theta"]
     hough_acc["d_rho"] = math.pi / 8
      
-    theta = np.arange(-math.pi / 2, math.pi / 2 + d_theta, d_theta)
+    hough_acc["theta space"] = np.arange(-math.pi / 2, math.pi / 2, 
+                                         hough_acc["d_theta"])
      
     distance = np.sqrt((img["x_max"] + 1)**2 + (img["y_max"] + 1)**2)
-    rho = np.arange(-distance, distance, d_rho)
-    
-    return rho, theta, img_height, img_width, d_rho, d_theta
+    hough_acc["rho space"] = np.arange(-distance, distance, hough_acc["d_rho"])
 
 
-def fill_hs_acc(ht_acc, points, rho, theta):
+def fill_hs_acc(hough_acc, points):
     """
     Compute voices for every (rho, theta) pair in Hough Accumulator and update
     it values.
@@ -132,16 +106,14 @@ def fill_hs_acc(ht_acc, points, rho, theta):
 
     """
     
-    for x__, y__ in points:
-        for theta_idx in range(len(theta)):
-            rho_val = x__*math.cos(theta[theta_idx]) + \
-                    y__*math.sin(theta[theta_idx])
-            rho_idx = (np.nonzero(np.abs(rho-rho_val) ==
-                       np.min(np.abs(rho-rho_val)))[0])
-            ht_acc[rho_idx, theta_idx] += 1
+    for x, y in points:
+        for theta_idx in range(len(hough_acc["theta space"])):
+            rho_val = (x*math.cos(hough_acc["theta space"][theta_idx]) + 
+                       y*math.sin(hough_acc["theta space"][theta_idx]))
+            rho_idx = (np.nonzero(np.abs(hough_acc["rho space"]-rho_val) ==
+                       np.min(np.abs(hough_acc["rho space"]-rho_val)))[0])
+            hough_acc["accumulator"][rho_idx, theta_idx] += 1
     # ht_acc[ht_acc < MIN_ACCEPT_HEIGHT] = 0
-    
-    return ht_acc
 
 
 def hough_transform(img):
@@ -176,10 +148,11 @@ def hough_transform(img):
         A theta threshold required for further computation
     """
     hough_acc = {}
-    create_rho_theta(img, hough_acc)
-    ht_acc = np.zeros((len(rho), len(theta)))
-    fill_hs_acc(ht_acc, points, rho, theta)
-    return rho, theta, ht_acc, img_height, img_width, d_rho, d_theta
+    create_rho_theta(hough_acc, img)
+    hough_acc["accumulator"] = np.zeros((len(hough_acc["rho space"]), 
+                                         len(hough_acc["theta space"])))
+    fill_hs_acc(hough_acc, img["points"])
+    return hough_acc
 
 
 def enhance(ht_acc, img_h, img_w, d_rho, d_theta):
@@ -407,8 +380,8 @@ def run_algorithm(points):
     '''
 # =============================================================================
     image = gen_shape_dict(points)
-   
-#     rhos, thetas, ht_acc, img_height, img_width, d_rho, d_theta = hough_transform(points)
+    hough_acc = hough_transform(image)
+
 #     rho_theta_acc = find_peaks(ht_acc, rhos, thetas, img_height, img_width, d_rho, d_theta)
 #     
 #     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
@@ -441,7 +414,7 @@ def run_algorithm(points):
 #     ans.plot(x2, y2)
 #     ans.set_title(FILE_PATH)
 # =============================================================================
-    
+    return 0 
 
 run_algorithm(assign_figure(FILE_PATH))
 
