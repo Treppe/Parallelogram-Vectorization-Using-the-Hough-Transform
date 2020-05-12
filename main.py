@@ -225,7 +225,8 @@ def get_paired_peaks(hough_acc):
 
     """
     extended_peaks = []
-    theta_t = 3*hough_acc["d_theta"]                                           # Theta threshold. Depends on theta space resolution
+    theta_t = 3 * hough_acc["d_theta"]                                           # Theta threshold. Depends on theta space resolution
+                                          
     for peak1, peak2 in itertools.combinations(hough_acc["Hough peaks"], 2):
         theta1, theta2 = [peak1["theta"], peak2["theta"]]
         rho1, rho2 = [peak1["rho"], peak2["rho"]]
@@ -244,9 +245,12 @@ def get_paired_peaks(hough_acc):
                              "acc value": 0.5 * (acc_value1 + 
                                                  acc_value2)}
             extended_peaks.append(new_peak_dict)
+            
     assert len(extended_peaks) >= 2, \
             "At least 2 pairs must pass coorientation validation step. " + \
-                "But only " + str(len(extended_peaks)) +  " were found." 
+                "But only " + str(len(extended_peaks)) +  " were found.\n" + \
+                    "theta threshold: " + str(theta_t) + " rad.\n" + \
+                        "LENGHT THRESHOLD: " + str(LENGHT_T) + "."
     return extended_peaks
 
 
@@ -258,9 +262,9 @@ def vert_dist_is_valid(peak1, peak2):
     ang_dif = abs(beta1 - beta2)
     
     if ksi11 - ksi12 != 0 and ksi21 - ksi22 != 0:
-        vert_dist_cond1 = ((abs(ksi11 - ksi12) - c_1 * math.sin(ang_dif)) /
+        vert_dist_cond1 = abs((abs(ksi11 - ksi12) - c_1 * math.sin(ang_dif)) /
                            abs(ksi11 - ksi12))
-        vert_dist_cond2 = ((abs(ksi21 - ksi22) - c_2 * math.sin(ang_dif)) /
+        vert_dist_cond2 = abs((abs(ksi21 - ksi22) - c_2 * math.sin(ang_dif)) /
                            abs(ksi21 - ksi22))
         
         if max([vert_dist_cond1, vert_dist_cond2]) < DIST_T:
@@ -281,7 +285,8 @@ def gen_parallelograms_sides(peaks_list):
             parallelograms_sides.append(temp_dict)
     
     assert len(parallelograms_sides) > 0, \
-            "All sides combinations failed distance validation step."
+            "All sides combinations failed distance validation step.\n" + \
+                "DISTANCE THRESHOLD: " + str(DIST_T) + "."
     return parallelograms_sides
 
 
