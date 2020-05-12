@@ -67,17 +67,21 @@ def create_rho_theta(hough_acc, img):
     rho : np.array
         Empty array representing rho dimension
 
-    """    
-    n_max = max(img["x_max"] - img["x_min"], img["x_max"] - img["x_min"])
+    """
+    x_min, x_max = [img["x_min"], img["x_max"]]
+    y_min, y_max = [img["y_min"], img["y_max"]]    
+    n_max = max(x_max - x_min, y_max - y_min)
+    
+    # Theta space
     hough_acc["d_theta"] = math.pi / (4*(n_max - 1))
     hough_acc["d_rho"] = math.pi / 8
     hough_acc["theta space"] = np.arange(-math.pi / 2, math.pi / 2, 
                                          hough_acc["d_theta"])
-    distance = np.sqrt((img["x_max"] + 1)**2 + (img["y_max"] + 1)**2)
+    
+    # Rho space
+    distance = np.sqrt((x_max + 1) ** 2 + (y_max + 1) ** 2)
     hough_acc["rho space"] = np.arange(-distance, distance, hough_acc["d_rho"])
     
-    global THETA_T
-    THETA_T = 3 * hough_acc["d_theta"]
 
 def fill_hs_acc(hough_acc, points):
     """
@@ -101,13 +105,15 @@ def fill_hs_acc(hough_acc, points):
         Filled Hough accumulator
 
     """
+    theta_s = hough_acc["theta space"]
+    rho_s = hough_acc["rho space"]
     
     for x, y in points:
-        for theta_idx in range(len(hough_acc["theta space"])):
-            rho_val = (x*math.cos(hough_acc["theta space"][theta_idx]) + 
-                       y*math.sin(hough_acc["theta space"][theta_idx]))
-            rho_idx = (np.nonzero(np.abs(hough_acc["rho space"]-rho_val) ==
-                       np.min(np.abs(hough_acc["rho space"]-rho_val)))[0])
+        for theta_idx in range(len(theta_s)):
+            rho_val = (x*math.cos(theta_s[theta_idx]) + 
+                       y*math.sin(theta_s[theta_idx]))
+            rho_idx = (np.nonzero(np.abs(rho_s - rho_val) ==
+                       np.min(np.abs(rho_s - rho_val)))[0])
             hough_acc["accumulator"][rho_idx, theta_idx] += 1
 
 
@@ -219,19 +225,24 @@ def get_paired_peaks(hough_acc):
 
     """
     extended_peaks = []
-    for peak1, peak2 in itertools.combinations(hough_acc["Hough peaks"], 2):        
-        is_parallel = abs(peak1["theta"] - peak2["theta"]) < THETA_T
-        is_apropriate_lenght = (abs(peak1["acc value"] - peak2["acc value"]) <
-                                LENGHT_T * (peak1["acc value"] + \
-                                            peak2["acc value"]) * 0.5)
+    theta_t = 3*hough_acc["d_theta"]                                           # Theta threshold. Depends on theta space resolution
+    for peak1, peak2 in itertools.combinations(hough_acc["Hough peaks"], 2):
+        theta1, theta2 = [peak1["theta"], peak2["theta"]]
+        rho1, rho2 = [peak1["rho"], peak2["rho"]]
+        acc_value1, acc_value2 = [peak1["acc value"], peak2["acc value"]] 
+        
+        # Coorientation of sides conditions
+        is_parallel = abs(theta1 - theta2) < theta_t
+        is_apropriate_lenght = ((acc_value1 - acc_value2) <
+                                LENGHT_T * (acc_value1 + acc_value2) * 0.5)
         
         if is_parallel and is_apropriate_lenght:
             # Generate new extended peak
-            new_peak_dict = {"ksi1": peak1["rho"],
-                             "ksi2": peak2["rho"],
-                             "beta": 0.5 * (peak1["theta"] + peak2["theta"]),
-                             "acc value": 0.5 * (peak1["acc value"] + 
-                                                 peak2["acc value"])}
+            new_peak_dict = {"ksi1": rho1,
+                             "ksi2": rho2,
+                             "beta": 0.5 * (theta1 + theta2),
+                             "acc value": 0.5 * (acc_value1 + 
+                                                 acc_value2)}
             extended_peaks.append(new_peak_dict)
             
     return extended_peaks
