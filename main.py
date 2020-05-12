@@ -13,73 +13,67 @@ from shapely.geometry import Polygon
 
 
 # Parallelogram detecting thresholds
-# =============================================================================
-# <<<<<<< Updated upstream
-# MIN_ACCEPT_HEIGHT = np.array(4)
-# =======
 MIN_ACCEPT_HEIGHT = np.array(3)
-# >>>>>>> Stashed changes
-# =============================================================================
 LENGHT_T = 0.5
 DIST_T = 0.5
 PERIMETER_T = 0.1
 
-# =============================================================================
-# # Rho and theta discretive step (accumulator's resolution)
-# RHO_RES = 1
-# #RHO_RES = 0.1 * MIN_ACCEPT_HEIGHT
-# # THETA_RES = 0.017453*10
-# THETA_RES = 0.01745331 # 0.0174533 rad = 1 grad
-# THETA_T = THETA_RES * 3
-# MIN_PEAKS_TO_FIND = 100
-# 
-# # MASK CONSTATS
-# MASK_HEIGHT = 1
-# MASK_WIDTH = 1
-# 
-# # Image Enhencement Constants
-# ENH_H = 5
-# ENH_W = 5
-# =============================================================================
 
 # Choose figure to run
 FILE_PATH = "Testing_Figures/1.txt"
 
-
 def assign_figure(file_path):
+    assert isinstance(file_path, str), "file_path must be string."
+    
     file = open(file_path, "r")
     points = []
     for line in file:
         row = line.split()
         points.append([float(row[0]), float(row[1])])
+        
+    assert len(np.shape(points)) == 2 and np.shape(points)[1] == 2, \
+           "Set of points must be given as 2*n shaped array."
     return np.array(points)
 
 
-def find_min_max_points(points):
-    """
-    Find the highest value in each column of vector
-    Parameters
-    ----------
-    point : np.array
-        2D array of points where max values find to
+def gen_shape_dict(shape):
+    img = {"points": shape,
+             "x_min": np.ceil(np.amin(shape[:, 0])),
+             "x_max": np.ceil(np.amax(shape[:, 0])),
+             "y_min": np.ceil(np.amin(shape[:, 1])),
+             "y_max": np.ceil(np.amax(shape[:, 1])),
+             "perimeter": Polygon(shape).length}
+    img["height"] = img["y_max"] - img["y_min"]
+    img["width"] = img["x_max"] - img["x_min"]
+    return img
 
-    Returns
-    -------
-    x_max : float
-        The highest value by x axis
-    y_max : float
-        The higest value by y axis
+# =============================================================================
+# def find_min_max_points(points):
+#     """
+#     Find the highest value in each column of vector
+#     Parameters
+#     ----------
+#     point : np.array
+#         2D array of points where max values find to
+# 
+#     Returns
+#     -------
+#     x_max : float
+#         The highest value by x axis
+#     y_max : float
+#         The higest value by y axis
+# 
+#     """
+#     x_min = np.ceil(np.amin(points[:, 0]))
+#     x_max = np.ceil(np.amax(points[:, 0]))
+#     y_min = np.ceil(np.amin(points[:, 1]))
+#     y_max = np.ceil(np.amax(points[:, 1]))
+# 
+#     return x_min, x_max, y_min, y_max
+# =============================================================================
 
-    """
-    x_min = np.ceil(np.amin(points[:, 0]))
-    x_max = np.ceil(np.amax(points[:, 0]))
-    y_min = np.ceil(np.amin(points[:, 1]))
-    y_max = np.ceil(np.amax(points[:, 1]))
 
-    return x_min, x_max, y_min, y_max
-
-
-def create_rho_theta(points):
+def create_rho_theta(img, hough_acc):
     """
     Helper function for Hough Transform
     Creates rho and theta dimension for enchaced Hough accumulator
@@ -100,32 +94,17 @@ def create_rho_theta(points):
 
     """
     global THETA_T
-    x_min, x_max, y_min, y_max = find_min_max_points(points)
-    img_height = y_max - y_min
-    img_width = x_max - x_min
     
-    n_max = max(x_max - x_min, y_max - y_min)
+    n_max = max(img["x_max"] - img["x_mi"], img["x_max"] - img["x_min"])
     
-    d_theta = math.pi / (4*(n_max - 1))
-    THETA_T = 3 * d_theta
-    d_rho = math.pi / 8
+    hough_acc["d_theta"] = math.pi / (4*(n_max - 1))
+    THETA_T = 3 * hough_acc["d_theta"]
+    hough_acc["d_rho"] = math.pi / 8
      
     theta = np.arange(-math.pi / 2, math.pi / 2 + d_theta, d_theta)
      
-    distance = np.sqrt((x_max + 1)**2 + (y_max + 1)**2)
+    distance = np.sqrt((img["x_max"] + 1)**2 + (img["y_max"] + 1)**2)
     rho = np.arange(-distance, distance, d_rho)
-# =============================================================================
-# =============================================================================
-#     theta = np.linspace(-math.pi / 2, 0.0,
-#                          math.ceil(math.pi / (2*THETA_RES) + 1))
-#     theta = np.concatenate((theta, -theta[len(theta)-2::-1]))
-#   
-#     distance = np.sqrt((x_max + 1)**2 + (y_max + 1)**2)
-#     dummy = math.ceil(distance / RHO_RES)
-#     nrho = 2*dummy + 1
-#     rho = np.linspace(-dummy*RHO_RES, dummy*RHO_RES, nrho)
-# =============================================================================
-# =============================================================================
     
     return rho, theta, img_height, img_width, d_rho, d_theta
 
@@ -165,7 +144,7 @@ def fill_hs_acc(ht_acc, points, rho, theta):
     return ht_acc
 
 
-def hough_transform(points):
+def hough_transform(img):
     """
     Builds a Hough H(theta, rho) space for given arrai of (x,y) coordinates
 
@@ -196,18 +175,16 @@ def hough_transform(points):
     theta_T : float
         A theta threshold required for further computation
     """
-    
-    
-    rho, theta, img_height, img_width, d_rho, d_theta = create_rho_theta(points)
+    hough_acc = {}
+    create_rho_theta(img, hough_acc)
     ht_acc = np.zeros((len(rho), len(theta)))
     fill_hs_acc(ht_acc, points, rho, theta)
     return rho, theta, ht_acc, img_height, img_width, d_rho, d_theta
 
+
 def enhance(ht_acc, img_h, img_w, d_rho, d_theta):
     h = int(img_h) // 4
     w = int(img_w) // 4
-    #h = d_rho // (math.sqrt((img_h / 2)**2 + (img_w / 2)**2))
-    #w = d_theta // (5 * math.pi / img_w)
     ht_acc_enh = np.copy(ht_acc)
     for row in range(ht_acc.shape[0]):
         if np.sum(ht_acc[row, :]) != 0:
@@ -222,7 +199,6 @@ def enhance(ht_acc, img_h, img_w, d_rho, d_theta):
                     ht_acc_enh[row, col] = (h * w * ht_acc[row, col]**2 / 
                                             integral) 
     return ht_acc_enh
-
 
 
 def find_peaks(ht_acc, rhos, thetas, img_h, img_w, d_rho, d_theta):
@@ -361,6 +337,7 @@ def get_sides_parameters(sides_pair):
     
     return [side1, side2, side3, side4]
 
+
 def validate_perimeter_v2(valid_sides_pairs, actual_perimeter):
     min_dif = float("inf")
     best_pair = None
@@ -387,6 +364,7 @@ def standart_deviastion(points_arr, figure_sides):
                                    point[1]*math.sin(side[1]) -
                                    - side[0])	                                  
 
+
 def find_intersection(line1, line2):
     rho1, theta1 = line1
     rho2, theta2 = line2
@@ -400,8 +378,6 @@ def find_intersection(line1, line2):
 
 def run_algorithm(points):
     '''
-
-
     Parameters
     ----------
     figure : TYPE, string
@@ -429,66 +405,44 @@ def run_algorithm(points):
         in Hough Space
 
     '''
-    actual_perimeter = Polygon(points).length
-    #actual_perimeter = np.shape(points)[0]    
-    rhos, thetas, ht_acc, img_height, img_width, d_rho, d_theta = hough_transform(points)
-    # Enhance test
-    #ht_acc_enh = enhance(ht_acc, img_height, img_width, d_rho, d_theta)
-    
-    #rhos, thetas, ht_acc = hough_transform(points)
-    # ht_acc_enh = enhance(ht_acc)
-    rho_theta_acc = find_peaks(ht_acc, rhos, thetas, img_height, img_width, d_rho, d_theta)
-    
-    extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
-    valid_peaks_pairs = find_valid_peaks_pair(extended_peaks, DIST_T)
-    print("valid_peaks_len: ", len(valid_peaks_pairs))
-    
-    gen_expected_perimeters(valid_peaks_pairs)
-    final_pairs = validate_perimeter_v2(valid_peaks_pairs, actual_perimeter)
-    print("final_pairs type: ", type(final_pairs))
-    
-    sides = get_sides_parameters(final_pairs)
-    x1_y1 = find_intersection(sides[0], sides[3])
-    x2_y2 = find_intersection(sides[0], sides[2])
-    x3_y3 = find_intersection(sides[1], sides[2])
-    x4_y4 = find_intersection(sides[1], sides[3])
-    vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
-    
-    ring1 = LinearRing(points)
-    x1, y1 = ring1.xy
-    
-    ring2 = LinearRing(vertices)
-    x2, y2 = ring2.xy
-    
-    fig = pyplot.figure(1, figsize=(5, 5), dpi=90)
-    example = fig.add_subplot(111)
-    example.plot(x1, y1, marker='o')
-    example.set_title(FILE_PATH)
-    
-    ans = fig.add_subplot(111)
-    ans.plot(x2, y2)
-    ans.set_title(FILE_PATH)
+# =============================================================================
+    image = gen_shape_dict(points)
+   
+#     rhos, thetas, ht_acc, img_height, img_width, d_rho, d_theta = hough_transform(points)
+#     rho_theta_acc = find_peaks(ht_acc, rhos, thetas, img_height, img_width, d_rho, d_theta)
+#     
+#     extended_peaks = get_cooriented_pairs(rho_theta_acc, rhos, thetas)
+#     valid_peaks_pairs = find_valid_peaks_pair(extended_peaks, DIST_T)
+#     print("valid_peaks_len: ", len(valid_peaks_pairs))
+#     
+#     gen_expected_perimeters(valid_peaks_pairs)
+#     final_pairs = validate_perimeter_v2(valid_peaks_pairs, actual_perimeter)
+#     print("final_pairs type: ", type(final_pairs))
+#     
+#     sides = get_sides_parameters(final_pairs)
+#     x1_y1 = find_intersection(sides[0], sides[3])
+#     x2_y2 = find_intersection(sides[0], sides[2])
+#     x3_y3 = find_intersection(sides[1], sides[2])
+#     x4_y4 = find_intersection(sides[1], sides[3])
+#     vertices = [x1_y1, x2_y2, x3_y3, x4_y4]
+#     
+#     ring1 = LinearRing(points)
+#     x1, y1 = ring1.xy
+#     
+#     ring2 = LinearRing(vertices)
+#     x2, y2 = ring2.xy
+#     
+#     fig = pyplot.figure(1, figsize=(5, 5), dpi=90)
+#     example = fig.add_subplot(111)
+#     example.plot(x1, y1, marker='o')
+#     example.set_title(FILE_PATH)
+#     
+#     ans = fig.add_subplot(111)
+#     ans.plot(x2, y2)
+#     ans.set_title(FILE_PATH)
+# =============================================================================
     
 
 run_algorithm(assign_figure(FILE_PATH))
 
-# =============================================================================
-# figure = assign_figure(FILE_PATH)
-# 
-# vertices = run_algorithm(figure)
-# 
-# ring1 = LinearRing(figure)
-# x1, y1 = ring1.xy
-# 
-# ring2 = LinearRing(vertices)
-# x2, y2 = ring2.xy
-# 
-# fig = pyplot.figure(1, figsize=(5, 5), dpi=90)
-# example = fig.add_subplot(111)
-# example.plot(x1, y1, marker='o')
-# example.set_title(FILE_PATH)
-# 
-# ans = fig.add_subplot(111)
-# ans.plot(x2, y2)
-# ans.set_title(FILE_PATH)
-# =============================================================================
+
