@@ -15,12 +15,12 @@ from shapely.geometry import Polygon
 # Parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(3)     # Used in find_peaks()
 LENGHT_T = 0.3                      # Used in get_paired_peaks() for coorientation validation step
-DIST_T = 0.3                        # Used in vert_dist_is_valid() for distance validation step
+DIST_T = 0.5                        # Used in vert_dist_is_valid() for distance validation step
 PERIMETER_T = 0.1                   # Used in validate_perimeter() for perimeter validation step
 
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/1.txt"
+FILE_PATH = "Testing_Figures/3.txt"
 
 def assign_figure(file_path):
     assert isinstance(file_path, str), "file_path must be string."
@@ -38,11 +38,11 @@ def assign_figure(file_path):
 
 def gen_shape_dict(shape):
     img = {"points": shape,
-             "x_min": np.ceil(np.amin(shape[:, 0])),
-             "x_max": np.ceil(np.amax(shape[:, 0])),
-             "y_min": np.ceil(np.amin(shape[:, 1])),
-             "y_max": np.ceil(np.amax(shape[:, 1])),
-             "perimeter": Polygon(shape).length}
+            "x_min": np.ceil(np.amin(shape[:, 0])),
+            "x_max": np.ceil(np.amax(shape[:, 0])),
+            "y_min": np.ceil(np.amin(shape[:, 1])),
+            "y_max": np.ceil(np.amax(shape[:, 1])),
+            "perimeter": Polygon(shape).length}
     img["height"] = img["y_max"] - img["y_min"]
     img["width"] = img["x_max"] - img["x_min"]
     return img
@@ -74,12 +74,12 @@ def create_rho_theta(hough_acc, img):
     
     # Theta space
     hough_acc["d_theta"] = math.pi / (4*(n_max - 1))
-    hough_acc["d_rho"] = math.pi / 8
     hough_acc["theta space"] = np.arange(-math.pi / 2, math.pi / 2, 
                                          hough_acc["d_theta"])
     
     # Rho space
     distance = np.sqrt((x_max + 1) ** 2 + (y_max + 1) ** 2)
+    hough_acc["d_rho"] = math.pi / 8
     hough_acc["rho space"] = np.arange(-distance, distance, hough_acc["d_rho"])
     
 
@@ -298,11 +298,12 @@ def validate_perimeter(valid_sides_pairs, actual_perimeter):
     best_pair = None
     min_delta = float('inf')
     for pair in valid_sides_pairs:
-        val_par_condition = (abs(actual_perimeter - pair["exp_per"]) <
-                              PERIMETER_T * pair["exp_per"])
+        exp_per = pair["exp_per"]
+        val_par_condition = (abs(actual_perimeter - exp_per) <
+                              PERIMETER_T * exp_per)
         if val_par_condition:
-            delta = (abs(abs(actual_perimeter - pair["exp_per"]) -
-                         PERIMETER_T * pair["exp_per"]))
+            delta = (abs(abs(actual_perimeter - exp_per) -
+                         PERIMETER_T * exp_per))
             if delta < min_delta:
                 best_pair = pair
                 min_delta = delta
@@ -390,16 +391,14 @@ def run_algorithm(points):
         in Hough Space
 
     '''
-# =============================================================================
     image = gen_shape_dict(points)
     hough_acc = hough_transform(image)
     find_peaks(hough_acc, image)     
     paired_peaks = get_paired_peaks(hough_acc)
-    parallelograms_sides = gen_parallelograms_sides(paired_peaks)
-#     print("valid_peaks_len: ", len(valid_peaks_pairs))
-#     
-#     gen_expected_perimeters(valid_peaks_pairs)
-#     final_pairs = validate_perimeter_v2(valid_peaks_pairs, actual_perimeter)
+    potent_paralls = gen_parallelograms_sides(paired_peaks)                     # Parameters of 4 sides
+                                                                                # potential desired parallelogram candidates
+    gen_expected_perimeters(potent_paralls)
+    best_parall = validate_perimeter(potent_paralls, image["perimeter"])
 #     print("final_pairs type: ", type(final_pairs))
 #     
 #     sides = get_sides_parameters(final_pairs)
