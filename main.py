@@ -9,22 +9,27 @@ import itertools
 import numpy as np
 from matplotlib import pyplot
 from shapely.geometry.polygon import LinearRing
-from shapely.geometry import Polygon
+from shapely.geometry import Point, Polygon
 
 
 # Parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(3)     # Used in find_peaks()
 LENGHT_T = 0.5                      # Used in get_paired_peaks() for coorientation validation step
 DIST_T = 0.5                        # Used in vert_dist_is_valid() for distance validation step
-PERIMETER_T = 0.1                   # Used in validate_perimeter() for perimeter validation step
+PERIMETER_T = 0.2                   # Used in validate_perimeter() for perimeter validation step
 
 
-THETA_RES = 0.5
-RHO_RES = 1
-THETA_T = 3 * THETA_RES
+# =============================================================================
+# THETA_RES = 0.0174533 * 0.5
+# RHO_RES = 1
+# THETA_T = 3 * THETA_RES
+# =============================================================================
+FACTOR = 0.2
+
+
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/1.txt"
+FILE_PATH = "Testing_Figures/magnet_6.dat"
 
 def assign_figure(file_path):
     assert isinstance(file_path, str), "file_path must be string."
@@ -35,6 +40,8 @@ def assign_figure(file_path):
         row = line.split()
         points.append([float(row[0]), float(row[1])])
         
+    global GOOD_DIST
+    GOOD_DIST = len(points) * 0.01    
     assert len(np.shape(points)) == 2 and np.shape(points)[1] == 2, \
            "Set of points must be given as 2*n shaped array."
     return np.array(points)
@@ -46,7 +53,7 @@ def gen_shape_dict(shape):
             "x_max": np.ceil(np.amax(shape[:, 0])),
             "y_min": np.ceil(np.amin(shape[:, 1])),
             "y_max": np.ceil(np.amax(shape[:, 1])),
-            "perimeter": np.shape(shape)[0]}       # Polygon(shape).length
+            "perimeter": Polygon(shape).length}       # 
     img["height"] = img["y_max"] - img["y_min"]
     img["width"] = img["x_max"] - img["x_min"]
     return img
@@ -91,13 +98,13 @@ def create_rho_theta(hough_acc, img):
     n_max = max(x_max - x_min, y_max - y_min)
     
     # Theta space
-    hough_acc["d_theta"] = math.pi / (4*(n_max - 1))
+    hough_acc["d_theta"] = math.pi / (2*(n_max - 1))
     hough_acc["theta space"] = np.arange(-math.pi / 2, math.pi / 2, 
                                          hough_acc["d_theta"])
     
     # Rho space
-    distance = np.sqrt((x_max + 1) ** 2 + (y_max + 1) ** 2)
-    hough_acc["d_rho"] = math.pi / 8
+    distance = np.sqrt((x_max) ** 2 + (y_max) ** 2)
+    hough_acc["d_rho"] = math.pi / 2
     hough_acc["rho space"] = np.arange(-distance, distance, hough_acc["d_rho"])
     
 
@@ -130,8 +137,8 @@ def fill_hs_acc(hough_acc, points):
         for theta_idx in range(len(theta_s)):
             rho_val = (x*math.cos(theta_s[theta_idx]) + 
                        y*math.sin(theta_s[theta_idx]))
-            rho_idx = (np.nonzero(np.abs(rho_s - rho_val) ==
-                       np.min(np.abs(rho_s - rho_val)))[0])
+            rho_idx = np.nonzero(np.abs(rho_s - rho_val) ==
+                                 np.min(np.abs(rho_s - rho_val)))[0]
             hough_acc["accumulator"][rho_idx, theta_idx] += 1
 
 
@@ -167,7 +174,7 @@ def hough_transform(img):
         A theta threshold required for further computation
     """
     hough_acc = {}
-    create_rho_theta_std(hough_acc, img)
+    create_rho_theta(hough_acc, img)
     hough_acc["accumulator"] = np.zeros((len(hough_acc["rho space"]), 
                                          len(hough_acc["theta space"])))
     fill_hs_acc(hough_acc, img["points"])
@@ -175,12 +182,12 @@ def hough_transform(img):
 
 
 def enhance(ht_acc, img_h, img_w):
-    h = int(img_h) // 4
-    w = int(img_w) // 4
+    h = 3
+    w = 3
     ht_acc_enh = np.copy(ht_acc)
-    for row in range(ht_acc.shape[0]):
+    for row in range(1, ht_acc.shape[0], 3):
         if np.sum(ht_acc[row, :]) != 0:
-            for col in range(ht_acc.shape[1]):
+            for col in range(1, ht_acc.shape[1], 3):
                 mask_origin = np.array([row - h // 2, col - w//2])
                 mask_origin[mask_origin < 0] = 0
                 integral = np.sum(ht_acc_enh[mask_origin[0] : mask_origin[0] + 
@@ -195,8 +202,7 @@ def enhance(ht_acc, img_h, img_w):
 
 def find_peaks(hough_acc, img):
     rho_theta_acc = []
-    hough_acc_enh = enhance(hough_acc["accumulator"], 
-                            img["height"], img["width"])
+    hough_acc_enh = enhance(hough_acc)
     
     while True:
         max_idx = np.where(hough_acc_enh == np.amax(hough_acc_enh))
@@ -214,13 +220,15 @@ def find_peaks(hough_acc, img):
     hough_acc["Hough peaks"] = rho_theta_acc
 
 
-def find_peaks_v2(hough_acc, points):
+def find_peaks_v2(hough_acc, img):
     parameters_list = []
-    accumulator = hough_acc["accumulator"]
-    peak_idx_list = np.argwhere(accumulator >= MIN_ACCEPT_HEIGHT)
+    accumulator = enhance(hough_acc["accumulator"], 
+                            img["height"], np.shape(hough_acc["accumulator"][1]))
+    max_acc_value = np.amax(accumulator)
+    peak_idx_list = np.argwhere(accumulator >= max_acc_value * FACTOR)
     
     for p_idx in peak_idx_list:
-        acc_value = accumulator[p_idx[0], p_idx[1]]
+        acc_value = hough_acc["accumulator"][p_idx[0], p_idx[1]]
         rho = hough_acc["rho space"][p_idx[0]]
         theta = hough_acc["theta space"][p_idx[1]]
         parameters_list.append({"rho": rho,
@@ -258,8 +266,7 @@ def get_paired_peaks(hough_acc):
 
     """
     extended_peaks = []
-    #theta_t = 3 * hough_acc["d_theta"]                                           # Theta threshold. Depends on theta space resolution
-    theta_t = THETA_T                                     
+    theta_t = hough_acc["d_theta"] * 3                                              # Theta threshold. Depends on theta space resolution                                     
     for peak1, peak2 in itertools.combinations(hough_acc["Hough peaks"], 2):
         theta1, theta2 = [peak1["theta"], peak2["theta"]]
         rho1, rho2 = [peak1["rho"], peak2["rho"]]
@@ -267,8 +274,7 @@ def get_paired_peaks(hough_acc):
         
         # Coorientation of sides conditions
         is_parallel = abs(theta1 - theta2) < theta_t
-        is_apropriate_lenght = ((acc_value1 - acc_value2) <
-                                LENGHT_T * (acc_value1 + acc_value2) * 0.5)
+        is_apropriate_lenght = (acc_value1 - acc_value2) < LENGHT_T * (acc_value1 + acc_value2) * 0.5
         
         if is_parallel and is_apropriate_lenght:
             # Generate new extended peak
@@ -352,7 +358,7 @@ def validate_perimeter(valid_sides_pairs, actual_perimeter):
                 
     assert best_pair != None, "Perimter validation step failed.\n" + \
                         "PERIMETER THRESHOLD: " + str(PERIMETER_T)              
-    return best_pair
+    return test_list
 
 
 def get_sides_parameters(sides_pair):
@@ -386,12 +392,23 @@ def validate_perimeter_v2(valid_sides_pairs, actual_perimeter):
     return best_pair
     
     
-def standart_deviastion(points_arr, figure_sides):
-    for point in points_arr:
-        for side in figure_sides:
-             pt_lin_distance = abs(point[0]*math.cos(side[1]) +
-                                   point[1]*math.sin(side[1]) -
-                                   - side[0])	                                  
+def get_best_shape(points_arr, rings_list):
+    min_dist_sum = float('inf')
+    best_shape = None
+    copy_points = np.copy(points_arr)
+    for ring in rings_list:
+        dist_sum = 0
+        shape = Polygon(ring)
+        for point in copy_points:
+            point = Point(point)
+            dist_sum += shape.exterior.distance(point) ** 2
+        if dist_sum <= GOOD_DIST:
+            return ring, dist_sum
+        if dist_sum < min_dist_sum:
+            min_dist_sum = dist_sum
+            best_shape = ring
+    return best_shape, min_dist_sum
+
 
 
 def find_intersection(line1, line2):
@@ -451,6 +468,7 @@ def run_algorithm(points):
         in Hough Space
 
     '''
+    build_plot(points, FILE_PATH)
     image = gen_shape_dict(points)
     hough_acc = hough_transform(image)
     find_peaks_v2(hough_acc, image)     
@@ -458,12 +476,17 @@ def run_algorithm(points):
     potent_paralls = gen_parallelograms_sides(paired_peaks)                     # Parameters of 4 sides
                                                                                 # potential desired parallelogram candidates
     gen_expected_perimeters(potent_paralls)
-    best_parall = validate_perimeter(potent_paralls, image["perimeter"])  
-    parall_sides = get_sides_parameters(best_parall)
-    vertices = get_vertices(parall_sides)
+    best_parall = validate_perimeter(potent_paralls, image["perimeter"])   
+    sides_params = [get_sides_parameters(parall) for parall in best_parall]
+    paralls_verts = [get_vertices(sides) for sides in sides_params]
+    vertices, deviation = get_best_shape(points, paralls_verts)
+# =============================================================================
+#     parall_sides = get_sides_parameters(best_parall)
+#     vertices = get_vertices(parall_sides)
+# =============================================================================
     
-    build_plot(points, FILE_PATH)
-    build_plot(vertices, "Solution")
+    build_plot(vertices, "Diff: " + str(deviation))
+    
     
 
 run_algorithm(assign_figure(FILE_PATH))
