@@ -15,34 +15,32 @@ from shapely.geometry import Point, Polygon
 
 # Parallelogram detecting thresholds
 MIN_ACCEPT_HEIGHT = np.array(3)     # Used in find_peaks()
-LENGHT_T = 0.5                      # Used in get_paired_peaks() for coorientation validation step
-DIST_T = 0.5                        # Used in vert_dist_is_valid() for distance validation step
-PERIMETER_T = 0.2                   # Used in validate_perimeter() for perimeter validation step
+LENGHT_T = 0.8                      # Used in get_paired_peaks() for coorientation validation step
+DIST_T = 0.8                        # Used in vert_dist_is_valid() for distance validation step
+PERIMETER_T = 0.3                   # Used in validate_perimeter() for perimeter validation step
 
 
 # =============================================================================
-# THETA_RES = 0.0174533 * 0.5
-# RHO_RES = 1
-# THETA_T = 3 * THETA_RES
+THETA_RES = 0.0174533 * 0.5
+RHO_RES = 0.5
+THETA_T = 3 * THETA_RES
 # =============================================================================
 FACTOR = 0.5
 
 
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/magnet_1.dat"
+FILE_PATH = "Testing_Figures/magnet_6.dat"
 
 def assign_figure(file_path):
     assert isinstance(file_path, str), "file_path must be string."
-    
+
     file = open(file_path, "r")
     points = []
     for line in file:
         row = line.split()
         points.append([float(row[0]), float(row[1])])
         
-    global GOOD_DIST
-    GOOD_DIST = len(points) * 0.01    
     assert len(np.shape(points)) == 2 and np.shape(points)[1] == 2, \
            "Set of points must be given as 2*n shaped array."
     return np.array(points)
@@ -72,6 +70,8 @@ def create_rho_theta_std(hough_acc, img):
     
     hough_acc["rho space"] = rho
     hough_acc["theta space"] = theta
+    hough_acc["d_theta"] = THETA_RES
+    hough_acc["d_rho"] = RHO_RES
 
 
 def create_rho_theta(hough_acc, img):
@@ -94,6 +94,7 @@ def create_rho_theta(hough_acc, img):
         Empty array representing rho dimension
 
     """
+    # Get image "shape"
     x_min, x_max = [img["x_min"], img["x_max"]]
     y_min, y_max = [img["y_min"], img["y_max"]]    
     n_max = max(x_max - x_min, y_max - y_min)
@@ -105,7 +106,7 @@ def create_rho_theta(hough_acc, img):
     
     # Rho space
     distance = np.sqrt((x_max) ** 2 + (y_max) ** 2)
-    hough_acc["d_rho"] = math.pi / 2
+    hough_acc["d_rho"] = math.pi / 4
     hough_acc["rho space"] = np.arange(-distance, distance, hough_acc["d_rho"])
     
 
@@ -239,6 +240,24 @@ def find_peaks_v2(hough_acc, img):
     
     hough_acc["Hough peaks"] = parameters_list
 
+def rucursive_call(hough_acc, img, counter):
+    copy_acc = deepcopy(hough_acc)
+    
+    # Find second highest value
+    acc_value_flat = list(set(list(copy_acc["accumulator"].flatten())))        # Prevent duplicates    
+    premax_val = np.partition(acc_value_flat, -counter)[-counter]
+    
+    # Redefine MIN_PEAK_HEIGHT factor
+    global FACTOR
+    FACTOR = 0.5 * premax_val / np.amax(copy_acc["accumulator"])
+    assert FACTOR != 0.5, "premax_val the same as max_val"
+    
+    # Repeat peaks search with new FACTOR
+    copy_acc["Hough peaks"] = []
+    find_peaks_v2(copy_acc, img)
+    return copy_acc
+    
+
 def get_paired_peaks(hough_acc, img, recursive_call = False):
     """
 
@@ -269,6 +288,8 @@ def get_paired_peaks(hough_acc, img, recursive_call = False):
     """
     extended_peaks = []
     theta_t = hough_acc["d_theta"] * 3                                              # Theta threshold. Depends on theta space resolution                                     
+    
+    # Pair matching peaks. Try to get parallel lines with of aprox. the same "length"
     for peak1, peak2 in itertools.combinations(hough_acc["Hough peaks"], 2):
         theta1, theta2 = [peak1["theta"], peak2["theta"]]
         rho1, rho2 = [peak1["rho"], peak2["rho"]]
@@ -279,6 +300,7 @@ def get_paired_peaks(hough_acc, img, recursive_call = False):
         is_apropriate_lenght = (acc_value1 - acc_value2) < \
                                 LENGHT_T * (acc_value1 + acc_value2) * 0.5
         
+        # Check if conditions are met
         if is_parallel and is_apropriate_lenght:
             # Generate new extended peak
             new_peak_dict = {"ksi1": rho1,
@@ -289,27 +311,7 @@ def get_paired_peaks(hough_acc, img, recursive_call = False):
                              "idx1": peak1["idx"],
                              "idx2": peak2["idx"]}
             extended_peaks.append(new_peak_dict)
-            
-    if (len(extended_peaks) == 1 and not recursive_call):
-        print("I LOVE RECURSION!")
-        rm_idx1 = extended_peaks[0]["idx1"]
-        rm_idx2 = extended_peaks[0]["idx2"]
-        copy_acc = deepcopy(hough_acc)
-        copy_acc["accumulator"][rm_idx1[0], rm_idx1[1]] = 0
-        copy_acc["accumulator"][rm_idx2[0], rm_idx2[1]] = 0
-        copy_acc["peaks"] = []
-        find_peaks_v2(copy_acc, img)
-        return extended_peaks + get_paired_peaks(copy_acc, img, True)
-    
-    if len(extended_peaks) == 0:
-        copy_acc = deepcopy(hough_acc)
-        for peak in copy_acc["Hough peaks"]:
-            copy_acc["accumulator"][peak["idx"][0], peak["idx"][1]] = 0
-            copy_acc["peaks"] = []
-        find_peaks_v2(copy_acc, img)
-        return get_paired_peaks(copy_acc, img)
-        
-            
+                        
 # =============================================================================
 #     assert len(extended_peaks) >= 2, \
 #             "At least 2 pairs must pass coorientation validation step. " + \
@@ -350,15 +352,6 @@ def gen_parallelograms_sides(peaks_list, hough_acc, img):
                          "ang_dif" : ang_dif}
             parallelograms_sides.append(temp_dict)
     
-    if len(parallelograms_sides) == 0:
-        copy_acc = deepcopy(hough_acc)
-        for peak in peaks_list:
-            copy_acc["accumulator"][peak["idx1"][0], peak["idx1"][1]] = 0
-            copy_acc["accumulator"][peak["idx2"][0], peak["idx2"][1]] = 0
-            copy_acc["peaks"] = []
-        find_peaks_v2(copy_acc, img)
-        new_peaks_list = get_paired_peaks(copy_acc, img)
-        return  gen_parallelograms_sides(new_peaks_list, copy_acc, img)  
 # =============================================================================
 #     assert len(parallelograms_sides) > 0, \
 #             "All sides combinations failed distance validation step.\n" + \
@@ -440,8 +433,6 @@ def get_best_shape(points_arr, rings_list):
         for point in copy_points:
             point = Point(point)
             dist_sum += shape.exterior.distance(point) ** 2
-        if dist_sum <= GOOD_DIST:
-            return ring, dist_sum
         if dist_sum < min_dist_sum:
             min_dist_sum = dist_sum
             best_shape = ring
@@ -509,12 +500,30 @@ def run_algorithm(points):
     build_plot(points, FILE_PATH)
     image = gen_shape_dict(points)
     hough_acc = hough_transform(image)
-    find_peaks_v2(hough_acc, image)     
-    paired_peaks = get_paired_peaks(hough_acc, image)
-    potent_paralls = gen_parallelograms_sides(paired_peaks, hough_acc, image)                     # Parameters of 4 sides
-                                                                                # potential desired parallelogram candidates
+    find_peaks_v2(hough_acc, image)
+    
+    paired_peaks = []
+    counter = 1
+    while len(paired_peaks) < 2:
+        paired_peaks = get_paired_peaks(hough_acc, image)
+        if len(paired_peaks) < 2:
+            counter += 1
+            hough_acc = rucursive_call(hough_acc, image, counter)
+
+    potent_paralls = []
+    counter = 1
+    while len(potent_paralls) < 1:
+        potent_paralls = gen_parallelograms_sides(paired_peaks, hough_acc, image)   # Parameters of sets of 4 sides
+                                                                                    # potential desired parallelogram candidates
+        if len(potent_paralls) < 1:
+            counter += 1
+            hough_acc = rucursive_call(hough_acc, image, counter)
+            paired_peaks = get_paired_peaks(hough_acc, image)
+        
+        
     gen_expected_perimeters(potent_paralls)
-    #best_parall = validate_perimeter(potent_paralls, image["perimeter"])   
+    # best_parall = validate_perimeter(potent_paralls, image["perimeter"])
+    # sides_params = [get_sides_parameters(parall) for parall in best_parall]
     sides_params = [get_sides_parameters(parall) for parall in potent_paralls]
     paralls_verts = [get_vertices(sides) for sides in sides_params]
     vertices, deviation = get_best_shape(points, paralls_verts)
