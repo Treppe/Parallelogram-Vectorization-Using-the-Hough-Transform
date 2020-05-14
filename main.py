@@ -5,6 +5,7 @@ into a set of four points - an ideal parallelogram.
 
 import math
 import itertools
+from copy import deepcopy
 
 import numpy as np
 from matplotlib import pyplot
@@ -24,12 +25,12 @@ PERIMETER_T = 0.2                   # Used in validate_perimeter() for perimeter
 # RHO_RES = 1
 # THETA_T = 3 * THETA_RES
 # =============================================================================
-FACTOR = 0.2
+FACTOR = 0.5
 
 
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/magnet_6.dat"
+FILE_PATH = "Testing_Figures/magnet_1.dat"
 
 def assign_figure(file_path):
     assert isinstance(file_path, str), "file_path must be string."
@@ -212,7 +213,7 @@ def find_peaks(hough_acc, img):
             theta = hough_acc["theta space"][max_idx[1]][0]
             rho_theta_acc.append({"rho": rho,
                                    "theta": theta,
-                                   "acc value": acc_value})
+                                   "acc value": acc_value,})
             hough_acc_enh[max_idx[0], max_idx[1]] = 0
         else:
             break
@@ -233,11 +234,12 @@ def find_peaks_v2(hough_acc, img):
         theta = hough_acc["theta space"][p_idx[1]]
         parameters_list.append({"rho": rho,
                                 "theta": theta,
-                                "acc value": acc_value})
+                                "acc value": acc_value,
+                                "idx": p_idx})
     
     hough_acc["Hough peaks"] = parameters_list
 
-def get_paired_peaks(hough_acc):
+def get_paired_peaks(hough_acc, img, recursive_call = False):
     """
 
     Parameters
@@ -274,7 +276,8 @@ def get_paired_peaks(hough_acc):
         
         # Coorientation of sides conditions
         is_parallel = abs(theta1 - theta2) < theta_t
-        is_apropriate_lenght = (acc_value1 - acc_value2) < LENGHT_T * (acc_value1 + acc_value2) * 0.5
+        is_apropriate_lenght = (acc_value1 - acc_value2) < \
+                                LENGHT_T * (acc_value1 + acc_value2) * 0.5
         
         if is_parallel and is_apropriate_lenght:
             # Generate new extended peak
@@ -282,14 +285,38 @@ def get_paired_peaks(hough_acc):
                              "ksi2": rho2,
                              "beta": 0.5 * (theta1 + theta2),
                              "acc value": 0.5 * (acc_value1 + 
-                                                 acc_value2)}
+                                                 acc_value2),
+                             "idx1": peak1["idx"],
+                             "idx2": peak2["idx"]}
             extended_peaks.append(new_peak_dict)
             
-    assert len(extended_peaks) >= 2, \
-            "At least 2 pairs must pass coorientation validation step. " + \
-                "But only " + str(len(extended_peaks)) +  " were found.\n" + \
-                    "theta threshold: " + str(theta_t) + " rad.\n" + \
-                        "LENGHT THRESHOLD: " + str(LENGHT_T) + "."
+    if (len(extended_peaks) == 1 and not recursive_call):
+        print("I LOVE RECURSION!")
+        rm_idx1 = extended_peaks[0]["idx1"]
+        rm_idx2 = extended_peaks[0]["idx2"]
+        copy_acc = deepcopy(hough_acc)
+        copy_acc["accumulator"][rm_idx1[0], rm_idx1[1]] = 0
+        copy_acc["accumulator"][rm_idx2[0], rm_idx2[1]] = 0
+        copy_acc["peaks"] = []
+        find_peaks_v2(copy_acc, img)
+        return extended_peaks + get_paired_peaks(copy_acc, img, True)
+    
+    if len(extended_peaks) == 0:
+        copy_acc = deepcopy(hough_acc)
+        for peak in copy_acc["Hough peaks"]:
+            copy_acc["accumulator"][peak["idx"][0], peak["idx"][1]] = 0
+            copy_acc["peaks"] = []
+        find_peaks_v2(copy_acc, img)
+        return get_paired_peaks(copy_acc, img)
+        
+            
+# =============================================================================
+#     assert len(extended_peaks) >= 2, \
+#             "At least 2 pairs must pass coorientation validation step. " + \
+#                 "But only " + str(len(extended_peaks)) +  " were found.\n" + \
+#                     "theta threshold: " + str(theta_t) + " rad.\n" + \
+#                         "LENGHT THRESHOLD: " + str(LENGHT_T) + "."
+# =============================================================================
     return extended_peaks
 
 
@@ -312,7 +339,7 @@ def vert_dist_is_valid(peak1, peak2):
     return [False, ang_dif]
 
 
-def gen_parallelograms_sides(peaks_list):
+def gen_parallelograms_sides(peaks_list, hough_acc, img):
     parallelograms_sides = []
     
     for peak1, peak2 in itertools.combinations(peaks_list, 2):
@@ -323,9 +350,20 @@ def gen_parallelograms_sides(peaks_list):
                          "ang_dif" : ang_dif}
             parallelograms_sides.append(temp_dict)
     
-    assert len(parallelograms_sides) > 0, \
-            "All sides combinations failed distance validation step.\n" + \
-                "DISTANCE THRESHOLD: " + str(DIST_T) + "."
+    if len(parallelograms_sides) == 0:
+        copy_acc = deepcopy(hough_acc)
+        for peak in peaks_list:
+            copy_acc["accumulator"][peak["idx1"][0], peak["idx1"][1]] = 0
+            copy_acc["accumulator"][peak["idx2"][0], peak["idx2"][1]] = 0
+            copy_acc["peaks"] = []
+        find_peaks_v2(copy_acc, img)
+        new_peaks_list = get_paired_peaks(copy_acc, img)
+        return  gen_parallelograms_sides(new_peaks_list, copy_acc, img)  
+# =============================================================================
+#     assert len(parallelograms_sides) > 0, \
+#             "All sides combinations failed distance validation step.\n" + \
+#                 "DISTANCE THRESHOLD: " + str(DIST_T) + "."
+# =============================================================================
     return parallelograms_sides
 
 
@@ -472,12 +510,12 @@ def run_algorithm(points):
     image = gen_shape_dict(points)
     hough_acc = hough_transform(image)
     find_peaks_v2(hough_acc, image)     
-    paired_peaks = get_paired_peaks(hough_acc)
-    potent_paralls = gen_parallelograms_sides(paired_peaks)                     # Parameters of 4 sides
+    paired_peaks = get_paired_peaks(hough_acc, image)
+    potent_paralls = gen_parallelograms_sides(paired_peaks, hough_acc, image)                     # Parameters of 4 sides
                                                                                 # potential desired parallelogram candidates
     gen_expected_perimeters(potent_paralls)
-    best_parall = validate_perimeter(potent_paralls, image["perimeter"])   
-    sides_params = [get_sides_parameters(parall) for parall in best_parall]
+    #best_parall = validate_perimeter(potent_paralls, image["perimeter"])   
+    sides_params = [get_sides_parameters(parall) for parall in potent_paralls]
     paralls_verts = [get_vertices(sides) for sides in sides_params]
     vertices, deviation = get_best_shape(points, paralls_verts)
 # =============================================================================
