@@ -19,10 +19,8 @@ DIST_T = 0.9                        # Used in vert_dist_is_valid() for distance 
 PERIMETER_T = 0.1                   # Used in validate_perimeter() for perimeter validation step
 
 
-# =============================================================================
 THETA_RES = 1.0 / 2
 RHO_RES = 1.0 / 4
-# =============================================================================
 START_PEAK_HEIGHT_T = 0.7
 
 MAX_DIV = 10
@@ -34,17 +32,6 @@ FILE_PATH = "Testing_Figures/3.txt"
 def get_figure(file_path):
     """
     Reads set of points from the file.
-    
-    Parameters
-    ----------
-    file_path : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    TYPE
-        DESCRIPTION.
-
     """
     assert isinstance(file_path, str), "file_path must be string."
 
@@ -59,26 +46,39 @@ def get_figure(file_path):
     return np.array(points)
 
 
-def get_min_side_len(shape):
-    diff = np.diff(shape, axis=0)
-    x_diff = diff[:, 0]
-    y_diff = diff[:, 1]
-    min_len = np.amin(np.sqrt(np.square(x_diff) + np.square(y_diff**2)))
-    return min_len
-
 def gen_shape_dict(shape):
     """
     Returns a dictionary containing shape charecteristics.
 
     Parameters
     ----------
-    shape : TYPE
-        DESCRIPTION.
+    shape : ndarray
+        Set of shape's points
+        2D array containing data with 'float' type.
 
     Returns
     -------
-    img : TYPE
-        DESCRIPTION.
+    img : dict
+        Dictionary containing shape charecteristics
+        KEYS DESCRIPTION:
+            points: ndarray
+                Function argument "shape"
+                2D array containing data with 'float' type.
+            x_min: float
+                Minimal x-value in given set of points
+            x_max: float
+                Maximal x-value in given set of points
+            y_min: float
+                Minimal y-value in given set of points
+            y_max: float
+                Maximal x-value in given set of points
+            perimeter: float
+                Perimeter of given shape
+            height: float
+                Vertical dimesion length of given shape
+            width: float
+                Horisontal dimension length of given shape
+                
 
     """
     
@@ -90,7 +90,6 @@ def gen_shape_dict(shape):
             "perimeter": Polygon(shape).length}       # 
     img["height"] = img["y_max"] - img["y_min"]
     img["width"] = img["x_max"] - img["x_min"]
-    img["min len"] = get_min_side_len(shape)
     return img
 
 
@@ -177,11 +176,7 @@ def find_peaks(hough_acc, img, peak_hieght_t):
 
 
 def rucursive_call(hough_acc, img, counter, peak_hieght_t):
-    copy_acc = deepcopy(hough_acc)
-    
-    # Find second highest value
-    acc_value_flat = list(set(list(copy_acc["accumulator"].flatten())))        # Prevent duplicates    
-    premax_val = np.partition(acc_value_flat, -counter)[-counter]
+    copy_acc = deepcopy(hough_acc) 
     
     # Redefine MIN PEAK HEIGHT threshold 
     peak_hieght_t *= 0.5
@@ -419,15 +414,20 @@ def run_algorithm(points):
     paired_peaks = []
     counter = 1
     while len(paired_peaks) < 2:
+        assert peak_hieght_t > 0.2, "Length validation step failed. " + \
+            "No parallelorams were found." 
         paired_peaks = get_paired_peaks(hough_acc, image)
         if len(paired_peaks) < 2:
             counter += 1
             hough_acc, peak_hieght_t = rucursive_call(hough_acc, image, 
                                                       counter, peak_hieght_t)
+            print(peak_hieght_t)
 
     potent_paralls = []
     counter = 1
     while len(potent_paralls) < 1:
+        assert peak_hieght_t > 0.2, "Distance validation step failed. " + \
+            "No parallelorams were found."
         potent_paralls = gen_parallelograms_sides(paired_peaks, hough_acc, 
                                                   image)                            # Parameters of sets of 4 sides
                                                                                     # potential desired parallelogram candidates
@@ -436,12 +436,15 @@ def run_algorithm(points):
             hough_acc, peak_hieght_t = rucursive_call(hough_acc, image, 
                                                       counter, peak_hieght_t)
             paired_peaks = get_paired_peaks(hough_acc, image)
+            print(peak_hieght_t)
         
         
     gen_expected_perimeters(potent_paralls)
     
     best_paralls = []
     while best_paralls == []:
+        assert peak_hieght_t > 0.2, "Perimeter validation step failed. " + \
+            "No parallelorams were found."
         best_paralls = validate_perimeter(potent_paralls, image["perimeter"])                        
         if best_paralls == []:
             counter += 1
@@ -451,6 +454,7 @@ def run_algorithm(points):
             potent_paralls = gen_parallelograms_sides(paired_peaks, hough_acc, 
                                                   image)
             gen_expected_perimeters(potent_paralls)
+            print(peak_hieght_t)
             
     sides_params = [get_sides_parameters(parall) for parall in best_paralls]
     paralls_verts = [get_vertices(sides) for sides in sides_params]
