@@ -14,19 +14,19 @@ from shapely.geometry import Point, Polygon
 
 
 # Parallelogram detecting thresholds
-LENGHT_T = 0.9                      # Used in get_paired_peaks() for coorientation validation step
-DIST_T = 0.9                        # Used in vert_dist_is_valid() for distance validation step
-PERIMETER_T = 0.1                   # Used in validate_perimeter() for perimeter validation step
+LENGHT_T = float("inf")                     # Used in get_paired_peaks() for coorientation validation step
+DIST_T = float("inf")                       # Used in vert_dist_is_valid() for distance validation step
+PERIMETER_T = 0.5                           # Used in validate_perimeter() for perimeter validation step
 
 
 THETA_RES = 1.0 / 2
 RHO_RES = 1.0 / 4
-START_PEAK_HEIGHT_T = 0.7
+START_PEAK_HEIGHT_T = 0.8
 
 MAX_DIV = 10
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/3.txt"
+FILE_PATH = "Testing_Figures/magnet_2.dat"
 
 
 def get_figure(file_path):
@@ -64,19 +64,19 @@ def gen_shape_dict(shape):
             points: ndarray
                 Function argument "shape"
                 2D array containing data with 'float' type.
-            x_min: float
+            "x_min" : float
                 Minimal x-value in given set of points
-            x_max: float
+            "x_max" : float
                 Maximal x-value in given set of points
-            y_min: float
+            "y_min" : float
                 Minimal y-value in given set of points
-            y_max: float
+            "y_max" : float
                 Maximal x-value in given set of points
-            perimeter: float
+            "perimeter" : float
                 Perimeter of given shape
-            height: float
+            "height" : float
                 Vertical dimesion length of given shape
-            width: float
+            "width" : float
                 Horisontal dimension length of given shape
                 
 
@@ -95,9 +95,24 @@ def gen_shape_dict(shape):
 
 def create_rho_theta(hough_acc, img):
     """
-    Helper function for Hough Transform
-    Creates rho and theta dimension for enchaced Hough accumulator and
-    writes it down in hough_acc dictionary
+    Helper function for Hough Transform. Creates rho and theta dimension for 
+    Hough accumulator and put in hough_acc dictionary. 
+    
+    Add new keys to hough_acc dict:
+        "d_rho"
+
+    Parameters
+    ----------
+    hough_acc : dict
+        Dictionary containing Hough transformation parameters.
+        See also: hough_transform()
+    img : dict
+        Dictionary containing shape charecteristics.
+
+    Returns
+    -------
+    None.
+
     """
     # Get image "shape"
     x_max = img["x_max"]
@@ -179,7 +194,7 @@ def rucursive_call(hough_acc, img, counter, peak_hieght_t):
     copy_acc = deepcopy(hough_acc) 
     
     # Redefine MIN PEAK HEIGHT threshold 
-    peak_hieght_t *= 0.5
+    peak_hieght_t *= 0.75
     assert peak_hieght_t != START_PEAK_HEIGHT_T, "premax_val the same as max_val"
     
     # Repeat peaks search with new FACTOR
