@@ -288,24 +288,14 @@ def gen_expected_perimeters(valid_peaks_pairs):
 
 
 def validate_perimeter(valid_sides_pairs, actual_perimeter):
-    best_pair = None
     valid_paralls = []
-    min_delta = float('inf')
     for pair in valid_sides_pairs:
         exp_per = pair["exp_per"]
         val_par_condition = (abs(actual_perimeter - exp_per) <
                               PERIMETER_T * exp_per)
         if val_par_condition:
-            delta = abs(actual_perimeter - exp_per)
             valid_paralls.append(pair)
-            if delta < min_delta:
-                best_pair = pair
-                min_delta = delta
                 
-# =============================================================================
-#     assert best_pair != None, "Perimter validation step failed.\n" + \
-#                         "PERIMETER THRESHOLD: " + str(PERIMETER_T)              
-# =============================================================================
     return valid_paralls
 
 
