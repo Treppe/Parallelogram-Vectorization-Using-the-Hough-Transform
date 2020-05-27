@@ -42,7 +42,16 @@
 
 Алгоритм эффективно обрабатывает шумные параллелограммы, не содержащие больших разрывов. Так наборы точек из предоставленных txt фалов 1, 2, 3 и dat файлов magnet_1 - magnet_6 и coil_1 дали следующие результаты:
 
-![GitHub Logo](/'Test Results'/1.png)
+![GitHub Logo](/Test_Results/1.png)
+![GitHub Logo](/Test_Results/2.png)
+![GitHub Logo](/Test_Results/3.png)
+![GitHub Logo](/Test_Results/coil_1.png)
+![GitHub Logo](/Test_Results/magnet_1.png)
+![GitHub Logo](/Test_Results/magnet_2.png)
+![GitHub Logo](/Test_Results/magnet_3.png)
+![GitHub Logo](/Test_Results/magnet_4.png)
+![GitHub Logo](/Test_Results/magnet_5.png)
+![GitHub Logo](/Test_Results/magnet_6.png)
 
 Значение "*Diff*" в заголовке графиков соответствует сумме квадратов отклонений точек данной фигуры от найденного параллелограмма.
 
