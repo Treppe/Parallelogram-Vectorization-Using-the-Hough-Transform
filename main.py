@@ -15,12 +15,11 @@ from shapely.geometry import Point, Polygon
 
 # Parallelogram detecting thresholds
 LENGHT_T = 0.8                    # Used in get_paired_peaks() for coorientation validation step
-# DIST_T = float("inf")           # Used in vert_dist_is_valid() for distance validation step
 PERIMETER_T = 0.1                 # Used in validate_perimeter() for perimeter validation step
 
 
 THETA_RES = 1.0 / 2
-RHO_RES = 1.0 / 1
+RHO_RES = 1.0 / 4
 START_PEAK_HEIGHT_T = 1
 PEAK_DEC = 0.1
 MAX_PEAKS_PAIRS = float("inf")               # Proportional to runtime
@@ -28,7 +27,7 @@ MAX_PEAKS_PAIRS = float("inf")               # Proportional to runtime
 MAX_DIV = 5
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/coil_6.dat"
+FILE_PATH = "Testing_Figures/1.txt"
 
 
 def get_figure(file_path):
@@ -47,9 +46,6 @@ def get_figure(file_path):
            "Set of points must be given as 2*n shaped array."
     return np.array(points)
 
-def getEquidistantPoints(p1, p2, parts):
-    return zip(np.linspace(p1[0], p2[0], parts+1),
-               np.linspace(p1[1], p2[1], parts+1))
 
 def gen_shape_dict(shape):
     """
@@ -86,26 +82,6 @@ def gen_shape_dict(shape):
                 
 
     """
-# =============================================================================
-#     ring = LinearRing(shape)
-#     ring_shape = np.array(ring.coords)
-#     diff_list = np.diff(ring_shape, axis=0)
-#     idx = 0
-#     for diff in diff_list:
-#         if max(abs(diff[0]), abs(diff[1])) >= 3:
-#             insert = getEquidistantPoints(ring_shape[idx], ring_shape[idx+1], 3)
-#             insert = np.array(list(insert))
-#             ring_shape = np.insert(ring_shape, idx+1, insert, axis=0)
-#             idx += 4
-#         else:
-#             idx += 1
-#     if np.amax(abs(ring_shape[-1]) - abs(ring_shape[0])) <= 1:
-#         insert = (shape[-1] + shape[0]) / 2
-#         ring_shape = np.add(ring_shape, insert)
-#         
-#     shape = ring_shape
-# =============================================================================
-
             
     img = {"points": shape,
             "x_min": np.ceil(np.amin(shape[:, 0])),
@@ -282,25 +258,6 @@ def get_paired_peaks(hough_acc, img):
     return extended_peaks
 
 
-def vert_dist_is_valid(peak1, peak2):
-    ksi11, ksi12, beta1, c_1 = [peak1["ksi1"], peak1["ksi2"],
-                                peak1["beta"], peak1["acc value"]]
-    ksi21, ksi22, beta2, c_2 = [peak2["ksi1"], peak2["ksi2"],
-                                peak2["beta"], peak2["acc value"]]
-    ang_dif = abs(beta1 - beta2)
-    
-    if ksi11 - ksi12 != 0 and ksi21 - ksi22 != 0:
-        vert_dist_cond1 = abs((abs(ksi11 - ksi12) - c_1 * math.sin(ang_dif)) /
-                           abs(ksi11 - ksi12))
-        vert_dist_cond2 = abs((abs(ksi21 - ksi22) - c_2 * math.sin(ang_dif)) /
-                           abs(ksi21 - ksi22))
-        
-        if max([vert_dist_cond1, vert_dist_cond2]) < DIST_T:
-            return [True, ang_dif]
-
-    return [False, ang_dif]
-
-
 def gen_parallelograms_sides(peaks_list, hough_acc, img):
     parallelograms_sides = []
     
@@ -368,11 +325,7 @@ def get_best_shape(points_arr, rings_list):
         if dist_sum < min_dist_sum and not too_far:
             min_dist_sum = dist_sum
             best_shape = ring
-    
-# =============================================================================
-#     assert best_shape != None, "No valid shapes were found.\n" + \
-#         "Max acceptable point-shape deviation summ: " + str(MAX_DIV)
-# =============================================================================
+            
     return best_shape, min_dist_sum
 
 
