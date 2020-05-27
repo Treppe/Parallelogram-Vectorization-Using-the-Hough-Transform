@@ -14,19 +14,21 @@ from shapely.geometry import Point, Polygon
 
 
 # Parallelogram detecting thresholds
-LENGHT_T = float("inf")                     # Used in get_paired_peaks() for coorientation validation step
-DIST_T = float("inf")                       # Used in vert_dist_is_valid() for distance validation step
-PERIMETER_T = 0.5                           # Used in validate_perimeter() for perimeter validation step
+LENGHT_T = 0.8                    # Used in get_paired_peaks() for coorientation validation step
+# DIST_T = float("inf")           # Used in vert_dist_is_valid() for distance validation step
+PERIMETER_T = 0.1                 # Used in validate_perimeter() for perimeter validation step
 
 
 THETA_RES = 1.0 / 2
-RHO_RES = 1.0 / 4
-START_PEAK_HEIGHT_T = 0.8
+RHO_RES = 1.0 / 1
+START_PEAK_HEIGHT_T = 1
+PEAK_DEC = 0.1
+MAX_PEAKS_PAIRS = float("inf")               # Proportional to runtime
 
-MAX_DIV = 10
+MAX_DIV = 5
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/magnet_2.dat"
+FILE_PATH = "Testing_Figures/coil_6.dat"
 
 
 def get_figure(file_path):
@@ -45,6 +47,9 @@ def get_figure(file_path):
            "Set of points must be given as 2*n shaped array."
     return np.array(points)
 
+def getEquidistantPoints(p1, p2, parts):
+    return zip(np.linspace(p1[0], p2[0], parts+1),
+               np.linspace(p1[1], p2[1], parts+1))
 
 def gen_shape_dict(shape):
     """
@@ -81,7 +86,27 @@ def gen_shape_dict(shape):
                 
 
     """
-    
+# =============================================================================
+#     ring = LinearRing(shape)
+#     ring_shape = np.array(ring.coords)
+#     diff_list = np.diff(ring_shape, axis=0)
+#     idx = 0
+#     for diff in diff_list:
+#         if max(abs(diff[0]), abs(diff[1])) >= 3:
+#             insert = getEquidistantPoints(ring_shape[idx], ring_shape[idx+1], 3)
+#             insert = np.array(list(insert))
+#             ring_shape = np.insert(ring_shape, idx+1, insert, axis=0)
+#             idx += 4
+#         else:
+#             idx += 1
+#     if np.amax(abs(ring_shape[-1]) - abs(ring_shape[0])) <= 1:
+#         insert = (shape[-1] + shape[0]) / 2
+#         ring_shape = np.add(ring_shape, insert)
+#         
+#     shape = ring_shape
+# =============================================================================
+
+            
     img = {"points": shape,
             "x_min": np.ceil(np.amin(shape[:, 0])),
             "x_max": np.ceil(np.amax(shape[:, 0])),
@@ -194,7 +219,7 @@ def rucursive_call(hough_acc, img, counter, peak_hieght_t):
     copy_acc = deepcopy(hough_acc) 
     
     # Redefine MIN PEAK HEIGHT threshold 
-    peak_hieght_t *= 0.75
+    peak_hieght_t -= 0.1
     assert peak_hieght_t != START_PEAK_HEIGHT_T, "premax_val the same as max_val"
     
     # Repeat peaks search with new FACTOR
@@ -241,12 +266,9 @@ def get_paired_peaks(hough_acc, img):
         acc_value1, acc_value2 = [peak1["acc value"], peak2["acc value"]] 
         
         # Coorientation of sides conditions
-        is_parallel = abs(theta1 - theta2) < theta_t
-        is_apropriate_lenght = (acc_value1 - acc_value2) < \
-                                LENGHT_T * (acc_value1 + acc_value2) * 0.5
-        
-        # Check if conditions are met
-        if is_parallel and is_apropriate_lenght:
+        are_parallel = abs(theta1 - theta2) < theta_t
+        is_apropriate_lenght = abs(acc_value1- acc_value2) < LENGHT_T * (acc_value1 + acc_value2) * 0.5
+        if are_parallel and is_apropriate_lenght:
             # Generate new extended peak
             new_peak_dict = {"ksi1": rho1,
                              "ksi2": rho2,
@@ -283,8 +305,8 @@ def gen_parallelograms_sides(peaks_list, hough_acc, img):
     parallelograms_sides = []
     
     for peak1, peak2 in itertools.combinations(peaks_list, 2):
-        condition, ang_dif = vert_dist_is_valid(peak1, peak2)
-        if condition:
+        ang_dif = abs(peak1["beta"] - peak2["beta"])
+        if ang_dif != 0:
             temp_dict = {"sides_a" : peak1,
                          "sides_b" : peak2,
                          "ang_dif" : ang_dif}
@@ -347,8 +369,10 @@ def get_best_shape(points_arr, rings_list):
             min_dist_sum = dist_sum
             best_shape = ring
     
-    assert best_shape != None, "No valid shapes were found.\n" + \
-        "Max acceptable point-shape deviation summ: " + str(MAX_DIV)
+# =============================================================================
+#     assert best_shape != None, "No valid shapes were found.\n" + \
+#         "Max acceptable point-shape deviation summ: " + str(MAX_DIV)
+# =============================================================================
     return best_shape, min_dist_sum
 
 
@@ -378,6 +402,38 @@ def build_plot(polygon_vers, title):
     polygon = fig.add_subplot(111)
     polygon.plot(x, y, marker='o')
     polygon.set_title(title)
+    
+    
+
+def detect_paralls(hough_acc, image, peak_hieght_t):
+    assert peak_hieght_t > 0.3, "No parallelograms were found"
+    print(peak_hieght_t)
+    
+    find_peaks(hough_acc, image, peak_hieght_t)
+    paired_peaks = get_paired_peaks(hough_acc, image)
+    if len(paired_peaks) < 2:
+        return detect_paralls(hough_acc, image, peak_hieght_t - PEAK_DEC)
+    assert len(paired_peaks) < MAX_PEAKS_PAIRS, "No parallelograms were found"
+    
+    potent_paralls = gen_parallelograms_sides(paired_peaks, hough_acc, 
+                                              image)                            # Parameters of sets of 4 sides
+                                                                                # potential desired parallelogram candidates
+    if len(potent_paralls) < 1:
+        return detect_paralls(hough_acc, image, peak_hieght_t - PEAK_DEC)
+        
+        
+    gen_expected_perimeters(potent_paralls)
+    best_paralls = validate_perimeter(potent_paralls, image["perimeter"])                        
+    if best_paralls == []:
+        return detect_paralls(hough_acc, image, peak_hieght_t - PEAK_DEC)
+    
+    sides_params = [get_sides_parameters(parall) for parall in best_paralls]
+    paralls_verts = [get_vertices(sides) for sides in sides_params]
+    vertices, deviation = get_best_shape(image["points"], paralls_verts)
+    if vertices == None:
+        return detect_paralls(hough_acc, image, peak_hieght_t - PEAK_DEC)
+    
+    return vertices, deviation
     
 
 def run_algorithm(points):
@@ -409,61 +465,14 @@ def run_algorithm(points):
         in Hough Space
 
     '''
-    build_plot(points, FILE_PATH)
     
     peak_hieght_t = START_PEAK_HEIGHT_T
     image = gen_shape_dict(points)
+    build_plot(image["points"], FILE_PATH)
     hough_acc = hough_transform(image)
-    find_peaks(hough_acc, image, START_PEAK_HEIGHT_T)
     
-    paired_peaks = []
-    counter = 1
-    while len(paired_peaks) < 2:
-        assert peak_hieght_t > 0.2, "Length validation step failed. " + \
-            "No parallelorams were found." 
-        paired_peaks = get_paired_peaks(hough_acc, image)
-        if len(paired_peaks) < 2:
-            counter += 1
-            hough_acc, peak_hieght_t = rucursive_call(hough_acc, image, 
-                                                      counter, peak_hieght_t)
-            print(peak_hieght_t)
-
-    potent_paralls = []
-    counter = 1
-    while len(potent_paralls) < 1:
-        assert peak_hieght_t > 0.2, "Distance validation step failed. " + \
-            "No parallelorams were found."
-        potent_paralls = gen_parallelograms_sides(paired_peaks, hough_acc, 
-                                                  image)                            # Parameters of sets of 4 sides
-                                                                                    # potential desired parallelogram candidates
-        if len(potent_paralls) < 1:
-            counter += 1
-            hough_acc, peak_hieght_t = rucursive_call(hough_acc, image, 
-                                                      counter, peak_hieght_t)
-            paired_peaks = get_paired_peaks(hough_acc, image)
-            print(peak_hieght_t)
-        
-        
-    gen_expected_perimeters(potent_paralls)
+    vertices, deviation = detect_paralls(hough_acc, image, peak_hieght_t)
     
-    best_paralls = []
-    while best_paralls == []:
-        assert peak_hieght_t > 0.2, "Perimeter validation step failed. " + \
-            "No parallelorams were found."
-        best_paralls = validate_perimeter(potent_paralls, image["perimeter"])                        
-        if best_paralls == []:
-            counter += 1
-            hough_acc, peak_hieght_t = rucursive_call(hough_acc, image, 
-                                                      counter, peak_hieght_t)
-            paired_peaks = get_paired_peaks(hough_acc, image)
-            potent_paralls = gen_parallelograms_sides(paired_peaks, hough_acc, 
-                                                  image)
-            gen_expected_perimeters(potent_paralls)
-            print(peak_hieght_t)
-            
-    sides_params = [get_sides_parameters(parall) for parall in best_paralls]
-    paralls_verts = [get_vertices(sides) for sides in sides_params]
-    vertices, deviation = get_best_shape(points, paralls_verts)
     build_plot(vertices, "Diff: " + str(deviation))
     
     
