@@ -31,7 +31,6 @@
   
 Меньшее значение этих констант даёт большую точность, однако слишком низкие значения могут значительно увеличить длительность работы алгоритма. Поэтому рекомендуемое значение для этих констант: 0.5 - для относительно чистых изображений с малым разброс точек вдоль сторон; 1 - для шумных изображений. 
 
-  Осуществив подобную процедуру относительно каждой данной точки, заполняется т.н. *Аккумуляторе Хафа*: 2-D массив, строки и столбцы которого, соответствуют значению полярных координат $\rho$  и $\theta$ в . Процесс заполнения аккумулятора называется "голосованием", т.к. мы подсчитываем сколько "голосов" получила каждая точка $(\rho ,\theta)$ . Чем больше голосов набрала точка в полярной системе координат тем больше точек лежат на, соответствующей ей, прямой в декартовой  системе координат. 
 * **LENGTH_T**.
 
   Данная константа используется в процессе поиска параллельных сторон параллелограмма. Обеспечивает равенство длинных этих сторон. Ускоряет дальнейший процесс поиска всех сторон параллелограмма. Рекомендуемое значение: 0.3 - для относительно чистых изображений с малым разброс точек вдоль сторон; 0.5 - для шумных изображений. 
@@ -43,24 +42,7 @@
 
 Алгоритм эффективно обрабатывает шумные параллелограммы, не содержащие больших разрывов. Так наборы точек из предоставленных txt фалов 1, 2, 3 и dat файлов magnet_1 - magnet_6 и coil_1 дали следующие результаты:
 
-​													 ![1](/home/egor/Google Drive/Programming/PROJECTS/ОПД/Parallelogram-Detection-Using-the-Hough-Transform/Test Results/1.png)
-
-![2](/home/egor/Google Drive/Programming/PROJECTS/ОПД/Parallelogram-Detection-Using-the-Hough-Transform/Test Results/2.png)
-
-![3](/home/egor/Google Drive/Programming/PROJECTS/ОПД/Parallelogram-Detection-Using-the-Hough-Transform/Test Results/3.png)
-
-![coil_1](/home/egor/Google Drive/Programming/PROJECTS/ОПД/Parallelogram-Detection-Using-the-Hough-Transform/Test Results/coil_1.png)
-
-![magnet_1](/home/egor/Google Drive/Programming/PROJECTS/ОПД/Parallelogram-Detection-Using-the-Hough-Transform/Test Results/magnet_1.png)
-![magnet_2](/home/egor/Google Drive/Programming/PROJECTS/ОПД/Parallelogram-Detection-Using-the-Hough-Transform/Test Results/magnet_2.png)
-
-![magnet_3](/home/egor/Google Drive/Programming/PROJECTS/ОПД/Parallelogram-Detection-Using-the-Hough-Transform/Test Results/magnet_3.png)
-
-![magnet_4](/home/egor/Google Drive/Programming/PROJECTS/ОПД/Parallelogram-Detection-Using-the-Hough-Transform/Test Results/magnet_4.png)
-
-![magnet_5](/home/egor/Google Drive/Programming/PROJECTS/ОПД/Parallelogram-Detection-Using-the-Hough-Transform/Test Results/magnet_5.png)
-
-![magnet_6](/home/egor/Google Drive/Programming/PROJECTS/ОПД/Parallelogram-Detection-Using-the-Hough-Transform/Test Results/magnet_6.png)
+![GitHub Logo](/'Test Results'/1.png)
 
 Значение "*Diff*" в заголовке графиков соответствует сумме квадратов отклонений точек данной фигуры от найденного параллелограмма.
 
