@@ -16,14 +16,14 @@ from shapely.geometry import Point, Polygon
 LENGTH_T = 0.5
 PERIMETER_T = 0.1
 START_PEAK_HEIGHT_T = 1
-MAX_PEAKS_PAIRS = float("inf")
+BAD_HEIGHT = 2
 
 # Hough accumulator resolution
-THETA_RES = 1.0 / 2
-RHO_RES = 1.0 / 4
+THETA_RES = 1.0 / 1
+RHO_RES = 1.0 / 1
 
 # Peak height threshold decrement
-PEAK_DEC = 0.1
+PEAK_DEC = START_PEAK_HEIGHT_T / 10.0
 
 # Maximum acceptable deviataion from original figure
 MAX_DIV = 5
@@ -275,7 +275,10 @@ def find_peaks(hough_acc, img, peak_hieght_t):
 
     # Get indexes of all peaks that height is greater or equal then the highest
     # peak times peak height threshold
-    peak_idx_list = np.argwhere(accumulator >= max_acc_value * peak_hieght_t)
+    min_height = max_acc_value * peak_hieght_t
+    assert min_height > BAD_HEIGHT, \
+        "Minimal peak height became to low. No parallelagrams were found."
+    peak_idx_list = np.argwhere(accumulator >= min_height)
 
     # Add each peak parameters to parameters_list as dictionary
     for p_idx in peak_idx_list:
@@ -593,11 +596,7 @@ def detect_paralls(hough_acc, image, peak_hieght_t):
         A sum of squared distances between detected parallelogramm and points
         from given set.
 
-    """
-    # If threshold is less then 0.3 minimal acceptable length of side becomes
-    # too small and it causes too many iterations and too long running time.
-    assert peak_hieght_t > 0.3, "No parallelograms were found"
-    
+    """    
     # Find the best peaks from Hough accumulator 
     find_peaks(hough_acc, image, peak_hieght_t)
 
