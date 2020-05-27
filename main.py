@@ -20,7 +20,7 @@ PERIMETER_T = 0.1                 # Used in validate_perimeter() for perimeter v
 
 
 THETA_RES = 1.0 / 2
-RHO_RES = 1.0 / 1
+RHO_RES = 1.0 / 4
 START_PEAK_HEIGHT_T = 1
 PEAK_DEC = 0.1
 MAX_PEAKS_PAIRS = float("inf")               # Proportional to runtime
@@ -28,7 +28,7 @@ MAX_PEAKS_PAIRS = float("inf")               # Proportional to runtime
 MAX_DIV = 5
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/coil_6.dat"
+FILE_PATH = "Testing_Figures/1.txt"
 
 
 def get_figure(file_path):
@@ -86,27 +86,6 @@ def gen_shape_dict(shape):
                 
 
     """
-# =============================================================================
-#     ring = LinearRing(shape)
-#     ring_shape = np.array(ring.coords)
-#     diff_list = np.diff(ring_shape, axis=0)
-#     idx = 0
-#     for diff in diff_list:
-#         if max(abs(diff[0]), abs(diff[1])) >= 3:
-#             insert = getEquidistantPoints(ring_shape[idx], ring_shape[idx+1], 3)
-#             insert = np.array(list(insert))
-#             ring_shape = np.insert(ring_shape, idx+1, insert, axis=0)
-#             idx += 4
-#         else:
-#             idx += 1
-#     if np.amax(abs(ring_shape[-1]) - abs(ring_shape[0])) <= 1:
-#         insert = (shape[-1] + shape[0]) / 2
-#         ring_shape = np.add(ring_shape, insert)
-#         
-#     shape = ring_shape
-# =============================================================================
-
-            
     img = {"points": shape,
             "x_min": np.ceil(np.amin(shape[:, 0])),
             "x_max": np.ceil(np.amax(shape[:, 0])),
