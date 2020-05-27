@@ -13,7 +13,7 @@ from shapely.geometry import Point, Polygon
 
 
 # Parallelogram detecting thresholds
-LENGTH_T = 0.8
+LENGTH_T = 0.5
 PERIMETER_T = 0.1
 START_PEAK_HEIGHT_T = 1
 MAX_PEAKS_PAIRS = float("inf")
