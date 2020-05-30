@@ -13,23 +13,24 @@ from shapely.geometry import Point, Polygon
 
 
 # Parallelogram detecting thresholds
-LENGTH_T = 0.5
+LENGTH_T = 0.3
 PERIMETER_T = 0.1
 START_PEAK_HEIGHT_T = 1
 BAD_HEIGHT = 2
+MAX_PAIRS_TO_FIND = 1000
 
 # Hough accumulator resolution
-THETA_RES = 1.0 / 1
-RHO_RES = 1.0 / 1
+THETA_RES = 1.0 / 2
+RHO_RES = 1.0 / 2
 
 # Peak height threshold decrement
 PEAK_DEC = START_PEAK_HEIGHT_T / 10.0
 
 # Maximum acceptable deviataion from original figure
-MAX_DIV = 5
+MAX_DIV = 10
 
 # Choose figure to run
-FILE_PATH = "Testing_Figures/1.txt"
+FILE_PATH = "Testing_Figures/magnet_6.dat"
 
 
 def get_figure(file_path):
@@ -492,14 +493,18 @@ def get_best_shape(edge_points, poly_list):
     for ring in poly_list:
         dist_sum = 0
         shape = Polygon(ring)
+        too_far = False
         for point in copy_points:
             point = Point(point)
 
             # Compute a distance between point and polygon
             dist_sum += shape.exterior.distance(point) ** 2
+            if dist_sum > MAX_DIV:
+                too_far = True
+                break
 
         # Assign a new minimal distance to compare and best shape
-        if dist_sum < min_dist_sum:
+        if dist_sum < min_dist_sum and not too_far:
             min_dist_sum = dist_sum
             best_shape = ring
 
@@ -597,6 +602,7 @@ def detect_paralls(hough_acc, image, peak_hieght_t):
         from given set.
 
     """    
+    print(peak_hieght_t)
     # Find the best peaks from Hough accumulator 
     find_peaks(hough_acc, image, peak_hieght_t)
 
@@ -607,6 +613,9 @@ def detect_paralls(hough_acc, image, peak_hieght_t):
     # If this condition doesn't meet repeat detection using lower peaks threshold.
     if len(parallel_peaks) < 2:
         return detect_paralls(hough_acc, image, peak_hieght_t - PEAK_DEC)
+    
+    assert len(parallel_peaks) <= MAX_PAIRS_TO_FIND, \
+        "Runtime error. Too many parallel lines were found."
 
     # Find peaks quads representing to 4 sides of parallelograms
     paralls_peaks = gen_parallelograms_sides(parallel_peaks, hough_acc)
