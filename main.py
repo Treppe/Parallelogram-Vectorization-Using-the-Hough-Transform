@@ -3,6 +3,7 @@ The algorithm which convert a noisy parallelogram
 into a set of four points - an ideal parallelogram.
 '''
 
+import sys
 import math
 import itertools
 
@@ -20,8 +21,8 @@ BAD_HEIGHT = 2
 MAX_PAIRS_TO_FIND = 1000
 
 # Hough accumulator resolution
-THETA_RES = 1.0 / 2
-RHO_RES = 1.0 / 2
+THETA_RES = 1.0 / 1
+RHO_RES = 1.0 / 1
 
 # Peak height threshold decrement
 PEAK_DEC = START_PEAK_HEIGHT_T / 10.0
@@ -29,13 +30,10 @@ PEAK_DEC = START_PEAK_HEIGHT_T / 10.0
 # Maximum acceptable deviataion from original figure
 MAX_DIV = 10
 
-# Choose figure to run
-FILE_PATH = "Testing_Figures/magnet_6.dat"
-
 
 def get_figure(file_path):
     """
-        Reads a set of points from the file.
+        Reads a set of points from the file and returns it as numpy array.
     """
     assert isinstance(file_path, str), "file_path must be string."
 
@@ -329,7 +327,7 @@ def get_paired_peaks(hough_acc, img):
         # Coorientation of sides and heights similarity conditions
         are_parallel = abs(theta1 - theta2) < theta_t
         are_simmilar_lengths = abs(acc_value1 - acc_value2) < \
-                                  (LENGTH_T * (acc_value1 + acc_value2) * 0.5)
+                               (LENGTH_T * (acc_value1 + acc_value2) * 0.5)
         if are_parallel and are_simmilar_lengths:
             # Generate new extended peak
             new_peak_dict = {"ksi1": rho1,
@@ -562,18 +560,26 @@ def get_vertices(parall_sides):
     return [x1_y1, x2_y2, x3_y3, x4_y4]
 
 
-def build_plot(polygon_vers, title):
+def build_plot(shape1, shape2, title):
     """
         Builds a plot of given ring shape
     """
-    ring1 = LinearRing(polygon_vers)
+    ring1 = LinearRing(shape1)
+    ring2 = LinearRing(shape2)
+    
     x, y = ring1.xy
+    fig1 = pyplot.figure(1, figsize=(5, 5), dpi=90)
+    polygon1 = fig1.add_subplot(111)
+    polygon1.plot(x, y, marker='o')
+    polygon1.set_title(title)
+    
+    x, y = ring2.xy
+    fig2 = pyplot.figure(1, figsize=(5, 5), dpi=90)
+    polygon2 = fig2.add_subplot(111)
+    polygon2.plot(x, y, marker='o')
+    polygon2.set_title(title)
 
-    fig = pyplot.figure(1, figsize=(5, 5), dpi=90)
-    polygon = fig.add_subplot(111)
-    polygon.plot(x, y, marker='o')
-    polygon.set_title(title)
-
+    pyplot.show()
 
 def detect_paralls(hough_acc, image, peak_hieght_t):
     """
@@ -602,7 +608,6 @@ def detect_paralls(hough_acc, image, peak_hieght_t):
         from given set.
 
     """    
-    print(peak_hieght_t)
     # Find the best peaks from Hough accumulator 
     find_peaks(hough_acc, image, peak_hieght_t)
 
@@ -650,26 +655,11 @@ def detect_paralls(hough_acc, image, peak_hieght_t):
     return vertices, deviation
 
 
-def run_algorithm(points):
-    """
-    Runs a parallelogramm detection algorithm.    
-
-    Parameters
-    ----------
-    points : ndarray
-        Set of shape's points
-        2D array containing data with 'float' type.
-
-    Returns
-    -------
-    None.
-
-    """
-
+if __name__ == "__main__":
+    file_path = sys.argv[1]
+    points = get_figure(file_path)
     # Get an image parameters for further comptetion
     image = gen_shape_dict(points)
-
-    build_plot(image["points"], FILE_PATH)
 
     # Hough transform step
     peak_height_t = START_PEAK_HEIGHT_T
@@ -678,7 +668,4 @@ def run_algorithm(points):
     # Parallelogramm detection step
     vertices, deviation = detect_paralls(hough_acc, image, peak_height_t)
 
-    build_plot(vertices, "Diff: " + str(deviation))
-
-
-run_algorithm(get_figure(FILE_PATH))
+    build_plot(image["points"], vertices, "Diff: " + str(deviation))
